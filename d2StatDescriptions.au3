@@ -154,7 +154,7 @@ global $g_d2StatNames[][2] = [ _
 		["", "Indestructible (0/1)"], _
 		["", "Cannot Be Frozen"], _
 		["", "#% Slower Stamina Drain"], _
-		["", "#% Chance to Reanimate Target"], _
+		["", "#% Reanimate as [MONSTER_NAME]"], _
 		["", "Piercing Attack"], _
 		["", "Fires Magic Arrows"], _
 		["", "Fires Explosive Arrows or Bolts"], _
@@ -288,7 +288,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", "Orb effects applied to this item are doubled amount (count * 2)"], _
+		["", "Orb effects applied to this item are doubled (amount * 2)"], _
 		["", "Mystic orb used amount"], _
 		["", ""], _
 		["", "#% Chance to cast [SKILL] on death blow"], _
@@ -355,7 +355,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", "Charm amount (count * 2) (for explanation see 'Basic' tab)"], _
+		["", "Charms (amount * 2) (for explanation see 'Basic' tab)"], _
 		["", "+#% to Physical/Magic spell damage"], _
 		["", "-#% To Enemy Physical/Magic Resistance"], _
 		["", "Strength +#%"], _
@@ -371,7 +371,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", ""], _
+		["", "Equipped runeword amount"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
@@ -389,7 +389,7 @@ global $g_d2StatNames[][2] = [ _
 		["", "+#% Bonus Damage to Mark of the Wild"], _
 		["", "+#% Bonus Elemental Damage to Mark of the Wild"], _
 		["", "+#% Duration Bonus to Mark of the Wild"], _
-		["", ""], _
+		["", "Already enchanted amount"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
@@ -422,7 +422,7 @@ global $g_d2StatNames[][2] = [ _
 		["", "After blocking/taking weapon damage effect active"], _
 		["", ""], _
 		["", ""], _
-		["", ""], _
+		["", "Bone Chimes - [DtU + DtD]% added as [STAT_NAME] +#% Bonus"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
@@ -482,7 +482,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", "Socketed rune amount (count * 32)"], _
+		["", "Socketed runes (amount * 32)"], _
 		["", "Innate Elemental damage +#%"], _
 		["", "+# Spell Focus"], _
 		["", ""], _
