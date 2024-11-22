@@ -1152,7 +1152,7 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 
         if(_GUI_Option("unique-tier") and $iQuality == 7) Then
             if($iLvl == 1) Then
-            elseif ($iLvl <= 100) then
+            elseif ($iLvl <= 105) then
                 $sPreName = "{TU} " & $sPreName
             elseif ($iLvl <= 115) then
                 $sPreName = "{SU} " & $sPreName
