@@ -328,10 +328,10 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", "# Buff activations???"], _
-		["", "#% To Fire Skill Damage"], _
-		["", "#% To Lightning Skill Damage"], _
-		["", "#% To Cold Skill Damage"], _
-		["", "#% To Poison Skill Damage"], _
+		["", "#% To Fire Spell Damage"], _
+		["", "#% To Lightning Spell Damage"], _
+		["", "#% To Cold Spell Damage"], _
+		["", "#% To Poison Spell Damage"], _
 		["", "-#% To Enemy Fire Resistance"], _
 		["", "-#% To Enemy Lightning Resistance"], _
 		["", "-#% To Enemy Cold Resistance"], _
@@ -382,7 +382,7 @@ global $g_d2StatNames[][2] = [ _
 		["", "+#% Bonus Damage to Bloodlust"], _
 		["", "+#% Bonus Elemental damage to Bloodlust"], _
 		["", ""], _
-		["", ""], _
+		["", "Base weapon Innate [ELEMENT_TYPE] damage #%"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
