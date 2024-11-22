@@ -63,7 +63,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", "#% Mana Stolen Per Hit"], _
 		["", ""], _
-		["", ""], _
+		["", "#% Stamina Stolen Per Hit"], _
 		["", ""], _
 		["", ""], _
 		["", "Skill Faster Run Walk +#%"], _
@@ -199,7 +199,7 @@ global $g_d2StatNames[][2] = [ _
 		["", "#% Chance to cast [SKILL] when you die"], _
 		["", "#% Chance to cast [SKILL] on striking"], _
 		["", "#% Chance to cast [SKILL] when you level-up"], _
-		["", ""], _
+		["", "Mega Impact amount"], _
 		["", "#% Chance to cast [SKILL] when struck"], _
 		["", ""], _
 		["", ""], _
@@ -218,7 +218,7 @@ global $g_d2StatNames[][2] = [ _
 		["", "+# to Life (Based on Character Level) [(value / 32) * [LEVEL]]"], _
 		["", "+# to Mana (Based on Character Level) [(value / 32) * [LEVEL]]"], _
 		["", "+# to Maximum damage (Based on Character Level) [(value / 32) * [LEVEL]]"], _
-		["", "Riftwalker Eye quest #3"], _
+		["", "Shrine Blessed amount"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
@@ -265,18 +265,18 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", ""], _
+		["", "Area Effect Attack amount"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", ""], _
-		["", "Chance to Crush attacker by +#%"], _
-		["", ""], _
+		["", "#% Chance to cast [SKILL] when you die"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", "Stun Attack"], _
-		["", ""], _
+		["", "Cannot be Disenchanted"], _
+		["", "Stun Attack amount"], _
+		["", "Area Effect Attack amount"], _
 		["", "Strength Factor +#"], _
 		["", ""], _
 		["", ""], _
@@ -287,7 +287,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", ""], _
+		["", "Orb effects applied to this item are quadrupled"], _
 		["", "Orb effects applied to this item are doubled (amount * 2)"], _
 		["", "Mystic orb used amount"], _
 		["", ""], _
@@ -364,13 +364,13 @@ global $g_d2StatNames[][2] = [ _
 		["", "Vitality +#%"], _
 		["", "Slows Attacker +#%"], _
 		["", "Attacker flees after striking +#%"], _
-		["", ""], _
-		["", ""], _
+		["", "Freezes Attacker +#%"], _
+		["", "Blinds Attacker +#%"], _
 		["", "Attacker Takes Cold Damage of #"], _
 		["", "Attacker Takes Fire Damage of #"], _
 		["", ""], _
 		["", ""], _
-		["", ""], _
+		["", "Amazing Grace amount"], _
 		["", "Equipped runeword amount"], _
 		["", ""], _
 		["", ""], _
@@ -444,9 +444,9 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", "Already upgraded amount"], _
 		["", "Summoned minion life +#%"], _
-		["", ""], _
-		["", ""], _
-		["", ""], _
+		["", "+# to Maximum Barbarian minions"], _
+		["", "+#% Damage from Protector Spirit Bloodlust"], _
+		["", "Restored amount"], _
 		["", "#% increased Healing from Potions"], _
 		["", ""], _
 		["", "Trophy amount"], _
@@ -468,19 +468,19 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", "+#% Bonus damage to Vessel of Retribution"], _
-		["", ""], _
+		["", "+# to Vessels Extra Targets"], _
 		["", "Summoned minion damage +#%"], _
 		["", ""], _
 		["", ""], _
-		["", "Ennead skill unlock flag (0/1)"], _
-		["", "Black Road unlock (0/1)"], _
+		["", "Ennead skill (0/1)"], _
+		["", "Black Road (0/1)"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
 		["", "Maximum Skill level +#"], _
-		["", ""], _
-		["", ""], _
+		["", "+# to Vitality per Socketed Gem"], _
+		["", "+# to Runemaster Defense Bonus"], _
 		["", ""], _
 		["", "Socketed runes (amount * 32)"], _
 		["", "Innate Elemental damage +#%"], _
@@ -488,7 +488,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", "Summoned minion resistances +#%"], _
 		["", "+#% Spell Focus (from items/runes)"], _
-		["", "Target takes additional damage +# "], _
+		["", "Target takes additional damage +#"], _
 		["", ""], _
 		["", ""], _
 		["", ""], _
@@ -504,7 +504,7 @@ global $g_d2StatNames[][2] = [ _
 		["", ""], _
 		["", ""], _
 		["", ""], _
-		["", ""], _
+		["", "+# Life Regenerated per Second (Based on Character Level) [(value / 32) * [LEVEL]]"], _
 		["", ""], _
 		["", ""], _
 		["", "Runes contributing to Gematria"], _
