@@ -697,15 +697,21 @@ func NotifierCache()
 		if (_MemoryRead($pBaseAddr + 0x84, $g_ahD2Handle)) then ; Weapon / Armor
 			$asMatch = StringRegExp($sName, "[1-4]|\Q(Sacred)\E|\Q(Angelic)\E|\Q(Masterworked)\E", $STR_REGEXPARRAYGLOBALMATCH)
 			if (not @error) then
-				Select
-					Case $asMatch == "(Sacred)"
+				if (Ubound($asMatch)>1 or $asMatch[0]= "") then
+					MsgBox($MB_OK+$MB_ICONWARNING,"D2Stats NotifierCache error", StringFormat("Error while parsing item: '%s'", $sName))
+					_Debug("NotifierCache", StringFormat("Error while parsing item: '%s'", $sName))
+					exit
+				endif
+
+				select
+					Case $asMatch[0] == "(Sacred)"
 						$sTier = "sacred"
-					Case $asMatch == "(Angelic)"
+					Case $asMatch[0] == "(Angelic)"
 						$sTier = "angelic"
-					Case $asMatch == "(Masterworked)"
+					Case $asMatch[0] == "(Masterworked)"
 						$sTier = "master"
 					Case Else
-						$sTier = $asMatch
+						$sTier = $asMatch[0]
 				EndSelect
 			Endif
 		endif
@@ -1152,7 +1158,7 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 
         if(_GUI_Option("unique-tier") and $iQuality == 7) Then
             if($iLvl == 1) Then
-            elseif ($iLvl <= 105) then
+            elseif ($iLvl <= 100) then
                 $sPreName = "{TU} " & $sPreName
             elseif ($iLvl <= 115) then
                 $sPreName = "{SU} " & $sPreName
