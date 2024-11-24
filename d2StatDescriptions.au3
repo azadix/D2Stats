@@ -364,8 +364,8 @@ global $g_d2StatNames[][2] = [ _
 		["", "Vitality +#%"], _
 		["", "Slows Attacker +#%"], _
 		["", "Attacker flees after striking +#%"], _
-		["", "Freezes Attacker +#%"], _
-		["", "Blinds Attacker +#%"], _
+		["", "Freezes Attacker +#"], _
+		["", "Blinds Attacker +#"], _
 		["", "Attacker Takes Cold Damage of #"], _
 		["", "Attacker Takes Fire Damage of #"], _
 		["", ""], _
