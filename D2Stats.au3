@@ -695,10 +695,11 @@ func NotifierCache()
 		$sTier = "0"
 
 		if (_MemoryRead($pBaseAddr + 0x84, $g_ahD2Handle)) then ; Weapon / Armor
+
 			$asMatch = StringRegExp($sName, "[1-4]|\Q(Sacred)\E|\Q(Angelic)\E|\Q(Masterworked)\E", $STR_REGEXPARRAYGLOBALMATCH)
-			if (not @error) then
-				if (Ubound($asMatch)>1 or $asMatch[0]= "") then
-					MsgBox($MB_OK+$MB_ICONWARNING,"D2Stats NotifierCache error", StringFormat("Error while parsing item: '%s'", $sName))
+			if (not @error) and IsArray($asMatch) then
+				if (Ubound($asMatch) > 1 or $asMatch[0] == "") then
+					MsgBox($MB_OK+$MB_ICONWARNING, "D2Stats NotifierCache error", StringFormat("Error while parsing item: '%s'", $sName))
 					_Debug("NotifierCache", StringFormat("Error while parsing item: '%s'", $sName))
 					exit
 				endif
@@ -713,7 +714,10 @@ func NotifierCache()
 					Case Else
 						$sTier = $asMatch[0]
 				EndSelect
-			Endif
+			else
+				_Debug("NotifierCache", StringFormat("No match found or error occurred while parsing '%s'", $sName))
+				$sTier = "0"
+			endif
 		endif
 
 		$g_avNotifyCache[$iClass][0] = $sName
