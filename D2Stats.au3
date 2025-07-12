@@ -56,6 +56,8 @@ Opt("GUICloseOnESC", 0)
 Opt("GUIOnEventMode", 1)
 Opt("GUIResizeMode", BitOR($GUI_DOCKAUTO, $GUI_DOCKHEIGHT))
 
+global $g_aMessages[0] ; Stores [GUI handle, GUI bg handle, expire time, height]
+
 #Region Global Variables
 func DefineGlobals()
 	global $g_sLog = ""
@@ -64,7 +66,6 @@ func DefineGlobals()
 
 	global $g_hScriptStartTime = TimerInit()
 	global $g_hOverlayGUI = 0
-	global $g_aMessages[0] ; Stores [GUI handle, GUI bg handle, expire time, height]
 	global $g_iNextYPos = 0; Tracks message next Y position
 	global $g_bCleanupRunning = False
 	global $g_iFontSize = 12
