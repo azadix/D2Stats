@@ -175,13 +175,13 @@ func Main()
 
 			UpdateHandle()
 			UpdateGUIOptions()
-
+			OverlayMain()
+			
 			if (IsIngame()) then
 				; why inject every frame if we can just inject once?
 				if (not $bIsIngame) then 
 					$g_bNotifyCache = True
 					InjectFunctions()
-					OverlayMain()
 				endif
 
 				if (_GUI_Option("nopickup") and not $bIsIngame) then _MemoryWrite($g_hD2Client + 0x11C2F0, $g_ahD2Handle, 1, "byte")
@@ -2129,11 +2129,11 @@ EndFunc
 
 Func OverlayMain()
     ; Find the game window if we haven't already
-    If $g_hOverlayGUI = 0 And IsGameWindowPresent() Then
+    If $g_hOverlayGUI = 0 And IsIngame() Then
         CreateOverlayWindow()
     ElseIf $g_hOverlayGUI <> 0 Then
         ; Check if game window still exists or is minimized
-        If Not IsGameWindowPresent() Then
+        If Not IsIngame() Then
             GUIDelete($g_hOverlayGUI)
             $g_hOverlayGUI = 0
             ; Clear all messages
