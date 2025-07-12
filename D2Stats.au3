@@ -65,13 +65,12 @@ func DefineGlobals()
 	global $g_hScriptStartTime = TimerInit()
 	global $g_hOverlayGUI = 0
 	global $g_aMessages[0] ; Stores [GUI handle, GUI bg handle, expire time, height]
-	global $g_iStartYPos = 30; Tracks starting Y position for new messages
-	global $g_iNextYPos = $g_iStartYPos; Tracks message next Y position
+	global $g_iNextYPos = 0; Tracks message next Y position
 	global $g_bCleanupRunning = False
 	global $g_iFontSize = 12
-	global $g_iRowHeight = Floor($g_iFontSize * 1.65)
-	global $g_iMargin = 10 ; Margin from window edges
+	global $g_iRowHeight = Floor($g_iFontSize * 1.6)
 	global $g_iNotificationTimeoutInMS = 5000
+	global $g_iLeftPad = 10
 
 	; Color array for ui elements
 	global $g_iColorArray[12] = [0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0x808000, 0x808080, 0x000000, 0xFF00FF, 0xFFBF00, 0xFFFF00, 0x008000, 0xA020F0]
@@ -171,14 +170,13 @@ func Main()
 	while 1
 		Sleep(20)
 
-		OverlayMain()
-
 		if (TimerDiff($hTimerUpdateDelay) > 250) then
 			$hTimerUpdateDelay = TimerInit()
 
 			UpdateHandle()
 			UpdateGUIOptions()
-
+			OverlayMain()
+			
 			if (IsIngame()) then
 				; why inject every frame if we can just inject once?
 				if (not $bIsIngame) then 
@@ -191,7 +189,6 @@ func Main()
 				if (_GUI_Option("notify-enabled")) then NotifierMain()
 
 				$bIsIngame = True
-				
 			else
 				$bIsIngame = False
 				$g_hTimerCopyName = 0
@@ -1927,7 +1924,13 @@ Func CreateOverlayWindow()
     If @error Then Return
     
     ; Create overlay covering full game width with small margins
-    $g_hOverlayGUI = GUICreate("D2StatsOverlay", $aPos[2] - ($g_iMargin * 2), $aPos[3], $aPos[0] + $g_iMargin, $aPos[1], $WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+    $g_hOverlayGUI = GUICreate("D2StatsOverlay", _
+								$aPos[2] + $g_iLeftPad, _
+								$aPos[3] - 30, _
+								$aPos[0] - 10, _
+								$aPos[1] + 30, _
+								$WS_POPUP, _
+								BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TRANSPARENT))
 	
     GUISetBkColor(0xABCDEF)
     _WinAPI_SetLayeredWindowAttributes($g_hOverlayGUI, 0xABCDEF, 255)
@@ -1938,19 +1941,10 @@ Func UpdateOverlayPosition()
     Local $hGameWindow = WinGetHandle("[CLASS:Diablo II]")
     If Not $hGameWindow Then Return
     
-    ; Hide overlay if game is minimized
-    Local $iStyle = _WinAPI_GetWindowLong($hGameWindow, $GWL_STYLE)
-    If BitAND($iStyle, $WS_MINIMIZE) Then
-        If $g_hOverlayGUI Then GUISetState(@SW_HIDE, $g_hOverlayGUI)
-        Return
-    Else
-        If $g_hOverlayGUI Then GUISetState(@SW_SHOWNOACTIVATE, $g_hOverlayGUI)
-    EndIf
-    
     Local $aPos = WinGetPos($hGameWindow)
     If Not @error Then
         ; Update overlay to match game window dimensions with margins
-        WinMove($g_hOverlayGUI, "", $aPos[0] + $g_iMargin, $aPos[1], $aPos[2] - ($g_iMargin * 2), $aPos[3])
+        WinMove($g_hOverlayGUI, "", $aPos[0] + $g_iLeftPad, $aPos[1] + 30, $aPos[2] - 10, $aPos[3]-30)
     EndIf
 EndFunc
 
@@ -1962,20 +1956,20 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 
     Local $iTextColor = $g_NotifierColorArray[$iColor]
     
-    ; Get current overlay width for text sizing (90% width for margins)
+    ; Get current overlay width for text sizing
     Local $aOverlayPos = WinGetPos($g_hOverlayGUI)
     Local $iTextWidth = $aOverlayPos[2]
     
     ; Remove Diablo II color codes (ÿcX)
     $sText = StringRegExpReplace($sText, "ÿc.", "")
     
-    ; Calculate max characters per line (no need for GDI measurements)
+    ; Calculate max characters per line
     Local $hTempDC = _WinAPI_GetDC($g_hOverlayGUI)
     Local $hFont = _WinAPI_CreateFont($g_iFontSize, 0, 0, 0, $FW_NORMAL, False, False, False, $DEFAULT_CHARSET, _
                                      $OUT_DEFAULT_PRECIS, $CLIP_DEFAULT_PRECIS, $ANTIALIASED_QUALITY, _
                                      $DEFAULT_PITCH, "Courier New")
     Local $hOldFont = _WinAPI_SelectObject($hTempDC, $hFont)
-    Local $iCharWidth = DllStructGetData(_WinAPI_GetTextExtentPoint32($hTempDC, "W"), "X") ; Measure 'W' (widest char)
+    Local $iCharWidth = DllStructGetData(_WinAPI_GetTextExtentPoint32($hTempDC, "W"), "X")
     _WinAPI_SelectObject($hTempDC, $hOldFont)
     _WinAPI_DeleteObject($hFont)
     _WinAPI_ReleaseDC($g_hOverlayGUI, $hTempDC)
@@ -1989,13 +1983,13 @@ Func PrintString($sText, $iColor = $ePrintWhite)
         If $sLine = "" Then ContinueLoop ; Skip empty lines (optional)
 
         ; Background (black outline)
-        Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), $g_iMargin, $g_iNextYPos, $iTextWidth, $g_iRowHeight)
+        Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine, "(?s).", "█"), 0, $g_iNextYPos, $iTextWidth, $g_iRowHeight)
         GUICtrlSetColor($idLabelBg, 0x0A0A0A)
         GUICtrlSetBkColor($idLabelBg, $GUI_BKCOLOR_TRANSPARENT)
         GUICtrlSetFont($idLabelBg, $g_iFontSize, $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
         ; Foreground (colored text)
-        Local $idLabel = GUICtrlCreateLabel($sLine, $g_iMargin, $g_iNextYPos, $iTextWidth, $g_iRowHeight)
+        Local $idLabel = GUICtrlCreateLabel($sLine, 0, $g_iNextYPos, $iTextWidth, $g_iRowHeight)
         GUICtrlSetColor($idLabel, $iTextColor)
         GUICtrlSetBkColor($idLabel, $GUI_BKCOLOR_TRANSPARENT)
         GUICtrlSetFont($idLabel, $g_iFontSize, $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
@@ -2092,7 +2086,7 @@ Func CleanUpExpiredText()
 
     Local $aMessagesToKeep[0][4]  ; Changed to 4 columns to match the new structure
     Local $bMessagesRemoved = False
-    Local $iNewYPos = $g_iStartYPos
+    Local $iNewYPos = 0
 
     For $i = 0 To UBound($g_aMessages) - 1
         ; Check if message should expire
@@ -2104,8 +2098,8 @@ Func CleanUpExpiredText()
         Else
             ; Message stays - keep it and reposition if needed
             If $bMessagesRemoved Then
-                GUICtrlSetPos($g_aMessages[$i][0], $g_iMargin, $iNewYPos)  ; Reposition background
-                GUICtrlSetPos($g_aMessages[$i][1], $g_iMargin, $iNewYPos)  ; Reposition foreground
+                GUICtrlSetPos($g_aMessages[$i][0], 0, $iNewYPos)  ; Reposition background
+                GUICtrlSetPos($g_aMessages[$i][1], 0, $iNewYPos)  ; Reposition foreground
             EndIf
             
             ; Add to new array
@@ -2128,18 +2122,18 @@ Func CleanUpExpiredText()
     ; Stop cleanup timer if no more messages
     If UBound($g_aMessages) = 0 Then
         $g_bCleanupRunning = False
-        $g_iNextYPos = $g_iStartYPos
+        $g_iNextYPos = 0
         AdlibUnRegister("CleanUpExpiredText")
     EndIf
 EndFunc
 
 Func OverlayMain()
     ; Find the game window if we haven't already
-    If $g_hOverlayGUI = 0 And IsGameWindowPresent() Then
+    If $g_hOverlayGUI = 0 And IsIngame() Then
         CreateOverlayWindow()
     ElseIf $g_hOverlayGUI <> 0 Then
         ; Check if game window still exists or is minimized
-        If Not IsGameWindowPresent() Then
+        If Not IsIngame() Then
             GUIDelete($g_hOverlayGUI)
             $g_hOverlayGUI = 0
             ; Clear all messages
@@ -2342,6 +2336,7 @@ func CreateGUI()
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyReset")
 	global $g_idNotifyTest = GUICtrlCreateButton("Help", 4 + 2*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyHelp")
+
 	GUICtrlCreateButton("Default", 4 + 3*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyDefault")
 
