@@ -65,13 +65,13 @@ func DefineGlobals()
 	global $g_hScriptStartTime = TimerInit()
 	global $g_hOverlayGUI = 0
 	global $g_aMessages[0] ; Stores [GUI handle, GUI bg handle, expire time, height]
-	global $g_iStartYPos = 30; Tracks starting Y position for new messages
-	global $g_iNextYPos = $g_iStartYPos; Tracks message next Y position
 	global $g_bCleanupRunning = False
-	global $g_iFontSize = 12
-	global $g_iRowHeight = Floor($g_iFontSize * 1.65)
-	global $g_iMargin = 10 ; Margin from window edges
-	global $g_iNotificationTimeoutInMS = 5000
+	global $g_iNextYPos;
+
+	Global $g_idOptionsScrollArea, $idScrollUp, $idScrollDown
+	Global $g_aOptionsControls[0] ; Array to store option control IDs
+	Global $g_iOptionsScrollPos = 0
+	Global $g_iOptionsVisibleLines = 12 ; Adjust based on your UI size
 
 	; Color array for ui elements
 	global $g_iColorArray[12] = [0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0x808000, 0x808080, 0x000000, 0xFF00FF, 0xFFBF00, 0xFFFF00, 0x008000, 0xA020F0]
@@ -129,7 +129,7 @@ func DefineGlobals()
 	global $g_hTimerCopyName = 0
 	global $g_sCopyName = ""
 
-	global const $g_iGUIOptionsGeneral = 10
+	global const $g_iGUIOptionsGeneral = 14
 	global const $g_iGUIOptionsHotkey = 3
 
 	global $g_avGUIOptionList[][5] = [ _
@@ -141,6 +141,10 @@ func DefineGlobals()
 		["notify-only-filtered", 0, "cb", "Only show filtered stats"], _
 		["oneline-name", 0, "cb", "One line item name and base type notification style"], _
 		["oneline-stats", 0, "cb", "One line item stats notification style"], _
+		["overlay-x", 10, "int", "Overlay X offset", "OnChange_OverlaySettings"], _
+		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings"], _
+		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings"], _
+		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings"], _
 		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)"], _
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem"], _
@@ -149,6 +153,7 @@ func DefineGlobals()
 		["notify-text", $g_sNotifyTextDefault, "tx"], _
 		["selectedNotifierRulesName", "Default", "tx"] _
 	]
+
 	global $g_goblinIds = [2774, 2775, 2776, 2779, 2780, 2781, 2784, 2785, 2786, 2787, 2788, 2789, 2790, 2791, 2792, 2793, 2794, 2795, 2799, 2802, 2803, 2805]
 	global $g_goblinBuffer[] = []
 endfunc
@@ -1470,10 +1475,9 @@ func _GUI_OptionCount()
 endfunc
 
 func _GUI_NewOption($iLine, $sOption, $sText, $sFunc = "")
-	local $iY = _GUI_LineY($iLine)*2 - _GUI_LineY(0)
-
-	local $idControl
-	local $sOptionType = _GUI_OptionType($sOption)
+    local $iY = _GUI_LineY($iLine)*2 - _GUI_LineY(0)
+    local $aControls[2] = [0, 0] ; Initialize array: [0]=label, [1]=control
+    local $sOptionType = _GUI_OptionType($sOption)
 
 	switch $sOptionType
 		case null
@@ -1492,23 +1496,58 @@ func _GUI_NewOption($iLine, $sOption, $sText, $sFunc = "")
 				_HotKey_Assign($iKeyCode, $sFunc, $HK_FLAG_D2STATS, "[CLASS:Diablo II]")
 			endif
 
-			$idControl = _GUICtrlHKI_Create($iKeyCode, _GUI_GroupX(), $iY, 120, 25)
+			$aControls[0] = _GUICtrlHKI_Create($iKeyCode, _GUI_GroupX(), $iY, 120, 22)
 			GUICtrlCreateLabel($sText, _GUI_GroupX() + 124, $iY + 4)
+			$aControls[1] = 0
 		case "cb"
-			$idControl = GUICtrlCreateCheckbox($sText, _GUI_GroupX(), $iY)
-			GUICtrlSetState(-1, _GUI_Option($sOption) ? $GUI_CHECKED : $GUI_UNCHECKED)
+            $aControls[0] = GUICtrlCreateCheckbox($sText, 10, $iY, Default, 22)
+            GUICtrlSetState($aControls[0], _GUI_Option($sOption) ? $GUI_CHECKED : $GUI_UNCHECKED)
+            $aControls[1] = 0
+		case "int"
+            $aControls[0] = GUICtrlCreateInput(Int(_GUI_Option($sOption)), 10, $iY, 50, 22)
+			GUICtrlSetOnEvent($aControls[0], $sFunc)
+            $aControls[1] = GUICtrlCreateLabel($sText, 70, $iY + 4, Default, 22)
 		case else
 			_Log("_GUI_NewOption", "Invalid option type '" & $sOptionType & "'")
 			exit
 	endswitch
+    
+    $g_avGUIOption[0][0] += 1
+    local $iIndex = $g_avGUIOption[0][0]
+    $g_avGUIOption[$iIndex][0] = $sOption
+    $g_avGUIOption[$iIndex][1] = ($aControls[1] <> 0) ? $aControls[1] : $aControls[0] ; Main control
+    $g_avGUIOption[$iIndex][2] = $sFunc
 
-	$g_avGUIOption[0][0] += 1
-	local $iIndex = $g_avGUIOption[0][0]
-
-	$g_avGUIOption[$iIndex][0] = $sOption
-	$g_avGUIOption[$iIndex][1] = $idControl
-	$g_avGUIOption[$iIndex][2] = $sFunc
+    Return $aControls
 endfunc
+
+Func OnChange_OverlaySettings()
+    Local $idCtrl = @GUI_CtrlId
+    Local $sOptionKey = ""
+
+    ; Find the matching option key for this control
+    For $i = 0 To UBound($g_aOptionsControls) - 1
+        If $g_aOptionsControls[$i][1] = $idCtrl Then
+            $sOptionKey = $g_avGUIOptionList[$i][0]
+            ExitLoop
+        EndIf
+    Next
+
+    ; If we found a valid key, update the value
+    If $sOptionKey <> "" Then
+        Local $sValue = GUICtrlRead($idCtrl)
+        _GUI_Option($sOptionKey, $sValue)
+
+        ; Special handling for overlay options
+        If StringInStr($sOptionKey, "overlay-") Then
+            If $g_hOverlayGUI Then
+                GUIDelete($g_hOverlayGUI)
+                $g_hOverlayGUI = 0
+            EndIf
+        EndIf
+    EndIf
+EndFunc
+
 
 func _GUI_OptionByRef($iOption, byref $sOption, byref $idControl, byref $sFunc)
 	$sOption = $g_avGUIOption[$iOption][0]
@@ -1905,6 +1944,62 @@ func OnClick_Forum()
 	ShellExecute("https://forum.median-xl.com/viewtopic.php?f=4&t=83520")
 endfunc
 
+Func OptionsScrollUp()
+    If $g_iOptionsScrollPos > 0 Then
+        $g_iOptionsScrollPos -= 1
+        UpdateVisibleOptions()
+    EndIf
+EndFunc
+
+Func OptionsScrollDown()
+    If $g_iOptionsScrollPos < $g_iGUIOptionsGeneral - $g_iOptionsVisibleLines Then
+        $g_iOptionsScrollPos += 1
+        UpdateVisibleOptions()
+    EndIf
+EndFunc
+
+Func UpdateVisibleOptions()
+    For $i = 0 To UBound($g_aOptionsControls) - 1
+        Local $bVisible = ($i >= $g_iOptionsScrollPos And $i < $g_iOptionsScrollPos + $g_iOptionsVisibleLines)
+        Local $iYPos = 30 + ($i - $g_iOptionsScrollPos) * 25
+
+        For $j = 0 To 1
+            If $g_aOptionsControls[$i][$j] Then
+                GUICtrlSetState($g_aOptionsControls[$i][$j], $bVisible ? $GUI_SHOW : $GUI_HIDE)
+                If $bVisible Then
+                    Local $aPos = ControlGetPos($g_hGUI, "", $g_aOptionsControls[$i][$j])
+                    GUICtrlSetPos($g_aOptionsControls[$i][$j], $aPos[0], $iYPos)
+                EndIf
+            EndIf
+        Next
+    Next
+    UpdateOptionsScrollButtons()
+EndFunc
+
+Func UpdateOptionsScrollButtons()
+    GUICtrlSetState($idScrollUp, $g_iOptionsScrollPos > 0 ? $GUI_ENABLE : $GUI_DISABLE)
+    GUICtrlSetState($idScrollDown, $g_iOptionsScrollPos < $g_iGUIOptionsGeneral - $g_iOptionsVisibleLines ? $GUI_ENABLE : $GUI_DISABLE)
+EndFunc
+
+Func WM_MOUSEWHEEL($hWnd, $iMsg, $wParam, $lParam)
+    ; Only process if mouse is over our options tab
+    Local $aPos = WinGetPos($g_hGUI)
+    Local $iMouseX = BitAND($lParam, 0xFFFF)
+    Local $iMouseY = BitShift($lParam, 16)
+    
+    If $iMouseX >= $aPos[0] And $iMouseX <= $aPos[0] + $aPos[2] And _
+       $iMouseY >= $aPos[1] + 25 And $iMouseY <= $aPos[1] + $aPos[3] - 60 Then
+        
+        Local $iDelta = BitShift($wParam, 16)
+        If $iDelta > 0 Then
+            OptionsScrollUp()
+        ElseIf $iDelta < 0 Then
+            OptionsScrollDown()
+        EndIf
+    EndIf
+    Return $GUI_RUNDEFMSG
+EndFunc
+
 #Region Overlay
 Func IsGameWindowPresent()
     Local $hGameWindow = WinGetHandle("[CLASS:Diablo II]")
@@ -1925,9 +2020,10 @@ Func CreateOverlayWindow()
     
     Local $aPos = WinGetPos($hGameWindow)
     If @error Then Return
-    
+    $g_iNextYPos = _GUI_Option("overlay-y")
+
     ; Create overlay covering full game width with small margins
-    $g_hOverlayGUI = GUICreate("D2StatsOverlay", $aPos[2] - ($g_iMargin * 2), $aPos[3], $aPos[0] + $g_iMargin, $aPos[1], $WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+    $g_hOverlayGUI = GUICreate("D2StatsOverlay", $aPos[2], $aPos[3], $aPos[0] + _GUI_Option("overlay-x"), $aPos[1], $WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 	
     GUISetBkColor(0xABCDEF)
     _WinAPI_SetLayeredWindowAttributes($g_hOverlayGUI, 0xABCDEF, 255)
@@ -1950,7 +2046,7 @@ Func UpdateOverlayPosition()
     Local $aPos = WinGetPos($hGameWindow)
     If Not @error Then
         ; Update overlay to match game window dimensions with margins
-        WinMove($g_hOverlayGUI, "", $aPos[0] + $g_iMargin, $aPos[1], $aPos[2] - ($g_iMargin * 2), $aPos[3])
+        WinMove($g_hOverlayGUI, "", $aPos[0] + _GUI_Option("overlay-x"), $aPos[1], $aPos[2], $aPos[3])
     EndIf
 EndFunc
 
@@ -1971,7 +2067,7 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     
     ; Calculate max characters per line (no need for GDI measurements)
     Local $hTempDC = _WinAPI_GetDC($g_hOverlayGUI)
-    Local $hFont = _WinAPI_CreateFont($g_iFontSize, 0, 0, 0, $FW_NORMAL, False, False, False, $DEFAULT_CHARSET, _
+    Local $hFont = _WinAPI_CreateFont(_GUI_Option("overlay-fontsize"), 0, 0, 0, $FW_NORMAL, False, False, False, $DEFAULT_CHARSET, _
                                      $OUT_DEFAULT_PRECIS, $CLIP_DEFAULT_PRECIS, $ANTIALIASED_QUALITY, _
                                      $DEFAULT_PITCH, "Courier New")
     Local $hOldFont = _WinAPI_SelectObject($hTempDC, $hFont)
@@ -1987,27 +2083,28 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     For $i = 0 To UBound($aSplitText) - 1
         Local $sLine = $aSplitText[$i]
         If $sLine = "" Then ContinueLoop ; Skip empty lines (optional)
-
+		
+		local $iRowHeight = Floor(_GUI_Option("overlay-fontsize") * 1.65)
         ; Background (black outline)
-        Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), $g_iMargin, $g_iNextYPos, $iTextWidth, $g_iRowHeight)
+        Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), _GUI_Option("overlay-x"), $g_iNextYPos, $iTextWidth, $iRowHeight)
         GUICtrlSetColor($idLabelBg, 0x0A0A0A)
         GUICtrlSetBkColor($idLabelBg, $GUI_BKCOLOR_TRANSPARENT)
-        GUICtrlSetFont($idLabelBg, $g_iFontSize, $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+        GUICtrlSetFont($idLabelBg, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
         ; Foreground (colored text)
-        Local $idLabel = GUICtrlCreateLabel($sLine, $g_iMargin, $g_iNextYPos, $iTextWidth, $g_iRowHeight)
+        Local $idLabel = GUICtrlCreateLabel($sLine, _GUI_Option("overlay-x"), $g_iNextYPos, $iTextWidth, $iRowHeight)
         GUICtrlSetColor($idLabel, $iTextColor)
         GUICtrlSetBkColor($idLabel, $GUI_BKCOLOR_TRANSPARENT)
-        GUICtrlSetFont($idLabel, $g_iFontSize, $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+        GUICtrlSetFont($idLabel, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
         ; Store message data
         ReDim $g_aMessages[UBound($g_aMessages) + 1][4]
         $g_aMessages[UBound($g_aMessages) - 1][0] = $idLabelBg
         $g_aMessages[UBound($g_aMessages) - 1][1] = $idLabel
         $g_aMessages[UBound($g_aMessages) - 1][2] = TimerDiff($g_hScriptStartTime)
-        $g_aMessages[UBound($g_aMessages) - 1][3] = $g_iRowHeight
+        $g_aMessages[UBound($g_aMessages) - 1][3] = $iRowHeight
 
-        $g_iNextYPos += $g_iRowHeight
+        $g_iNextYPos += $iRowHeight
     Next
 
     ; Start cleanup timer if needed
@@ -2092,11 +2189,11 @@ Func CleanUpExpiredText()
 
     Local $aMessagesToKeep[0][4]  ; Changed to 4 columns to match the new structure
     Local $bMessagesRemoved = False
-    Local $iNewYPos = $g_iStartYPos
+    Local $iNewYPos = _GUI_Option("overlay-y")
 
     For $i = 0 To UBound($g_aMessages) - 1
         ; Check if message should expire
-        If $g_aMessages[$i][2] <> 0 And TimerDiff($g_hScriptStartTime) >= $g_aMessages[$i][2] + $g_iNotificationTimeoutInMS Then
+        If $g_aMessages[$i][2] <> 0 And TimerDiff($g_hScriptStartTime) >= $g_aMessages[$i][2] + _GUI_Option("overlay-timeout") Then
             ; Message expired - delete it
             GUICtrlDelete($g_aMessages[$i][0])  ; Delete background label
             GUICtrlDelete($g_aMessages[$i][1])   ; Delete foreground label
@@ -2104,8 +2201,8 @@ Func CleanUpExpiredText()
         Else
             ; Message stays - keep it and reposition if needed
             If $bMessagesRemoved Then
-                GUICtrlSetPos($g_aMessages[$i][0], $g_iMargin, $iNewYPos)  ; Reposition background
-                GUICtrlSetPos($g_aMessages[$i][1], $g_iMargin, $iNewYPos)  ; Reposition foreground
+                GUICtrlSetPos($g_aMessages[$i][0], _GUI_Option("overlay-x"), $iNewYPos)  ; Reposition background
+                GUICtrlSetPos($g_aMessages[$i][1], _GUI_Option("overlay-x"), $iNewYPos)  ; Reposition foreground
             EndIf
             
             ; Add to new array
@@ -2128,7 +2225,7 @@ Func CleanUpExpiredText()
     ; Stop cleanup timer if no more messages
     If UBound($g_aMessages) = 0 Then
         $g_bCleanupRunning = False
-        $g_iNextYPos = $g_iStartYPos
+        $g_iNextYPos = _GUI_Option("overlay-y")
         AdlibUnRegister("CleanUpExpiredText")
     EndIf
 EndFunc
@@ -2148,7 +2245,7 @@ Func OverlayMain()
                 GUICtrlDelete($g_aMessages[$i][1])   ; Delete foreground label
             Next
             $g_aMessages = 0
-            $g_iNextYPos = 10
+            $g_iNextYPos = _GUI_Option("overlay-y")
             $g_bCleanupRunning = False
             AdlibUnRegister("CleanUpExpiredText")
         Else
@@ -2313,7 +2410,7 @@ func CreateGUI()
 	_GUI_NewItem(07, "Half freeze [118:1/1]", "Half freeze duration")
 	_GUI_NewItem(08, "Cannot be Frozen [153:1/1]")
 #EndRegion
-
+	LoadGUISettings()
 	GUICtrlCreateTabItem("Notifier")
 	
 	local $iButtonWidth = 60
@@ -2340,29 +2437,52 @@ func CreateGUI()
 
 	global $g_idNotifyReset = GUICtrlCreateButton("Reset", 4 + 1*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyReset")
+
 	global $g_idNotifyTest = GUICtrlCreateButton("Help", 4 + 2*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyHelp")
+
 	GUICtrlCreateButton("Default", 4 + 3*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifyDefault")
 
 	OnClick_NotifyReset()
 	RefreshNotifyRulesCombo(_GUI_Option("selectedNotifierRulesName"))
 
-	LoadGUISettings()
 	_GUI_GroupX(8)
 
 	GUICtrlCreateTabItem("Options")
-	local $iOption = 0
-
-	for $i = 1 to $g_iGUIOptionsGeneral
-		_GUI_NewOption($i-1, $g_avGUIOptionList[$iOption][0], $g_avGUIOptionList[$iOption][3], $g_avGUIOptionList[$iOption][4])
-			$iOption += 1
-	next
+    
+    ; Create scroll buttons
+    Local $idScrollUp = GUICtrlCreateButton("▲", $g_iGUIWidth - 20, 25, 18, 18)
+    GUICtrlSetOnEvent(-1, "OptionsScrollUp")
+    Local $idScrollDown = GUICtrlCreateButton("▼", $g_iGUIWidth - 20, $g_iGUIHeight - 20, 18, 18)
+    GUICtrlSetOnEvent(-1, "OptionsScrollDown")
+    
+    ; Initialize options controls array
+    ReDim $g_aOptionsControls[$g_iGUIOptionsGeneral][2]
+    
+    Local $iOption = 0
+    For $i = 0 To $g_iGUIOptionsGeneral - 1
+        Local $aControls = _GUI_NewOption($i, $g_avGUIOptionList[$iOption][0], $g_avGUIOptionList[$iOption][3], $g_avGUIOptionList[$iOption][4])
+        $g_aOptionsControls[$i][0] = $aControls[1] ; Label
+		$g_aOptionsControls[$i][1] = $aControls[0] ; Control
+        
+        ; Hide options outside visible range
+        If $i >= $g_iOptionsVisibleLines Then
+            For $j = 0 To 1
+                If $g_aOptionsControls[$i][$j] Then
+                    GUICtrlSetState($g_aOptionsControls[$i][$j], $GUI_HIDE)
+                EndIf
+            Next
+        EndIf
+        
+        $iOption += 1
+    Next
+    UpdateOptionsScrollButtons()
 
 	GUICtrlCreateTabItem("Hotkeys")
 	for $i = 1 to $g_iGUIOptionsHotkey
 		_GUI_NewOption($i-1, $g_avGUIOptionList[$iOption][0], $g_avGUIOptionList[$iOption][3], $g_avGUIOptionList[$iOption][4])
-			$iOption += 1
+		$iOption += 1
 	next
 
 	GUICtrlCreateTabItem("Sounds")
@@ -2403,6 +2523,7 @@ func CreateGUI()
 	UpdateGUI()
 	GUIRegisterMsg($WM_COMMAND, "WM_COMMAND")
 	GUIRegisterMsg($WM_GETMINMAXINFO, "WM_GETMINMAXINFO")
+	GUIRegisterMsg($WM_MOUSEWHEEL, "WM_MOUSEWHEEL")
 	GUISetState(@SW_SHOW)
 endfunc
 
@@ -2448,7 +2569,14 @@ func SaveGUISettings()
 	local $sWrite = "", $vValue
 	for $i = 0 to UBound($g_avGUIOptionList) - 1
 		$vValue = $g_avGUIOptionList[$i][1]
-		if ($g_avGUIOptionList[$i][2] == "tx") then $vValue = StringToBinary($vValue)
+
+		switch $g_avGUIOptionList[$i][2]
+			case "tx"
+				$vValue = StringToBinary($vValue)
+			case "int"
+				$vValue = Int($vValue)
+		endswitch
+		
 		$sWrite &= StringFormat("%s=%s%s", $g_avGUIOptionList[$i][0], $vValue, @LF)
 	next
 	IniWriteSection(@AutoItExe & ".ini", "General", $sWrite)
