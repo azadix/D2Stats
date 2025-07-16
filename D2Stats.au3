@@ -2020,10 +2020,15 @@ Func CreateOverlayWindow()
     
     Local $aPos = WinGetPos($hGameWindow)
     If @error Then Return
-    $g_iNextYPos = _GUI_Option("overlay-y")
+    $g_iNextYPos = 0
 
     ; Create overlay covering full game width with small margins
-    $g_hOverlayGUI = GUICreate("D2StatsOverlay", $aPos[2], $aPos[3], $aPos[0] + _GUI_Option("overlay-x"), $aPos[1], $WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+    $g_hOverlayGUI = GUICreate("D2StatsOverlay", _
+								$aPos[2] - _GUI_Option("overlay-x"), _
+								$aPos[3] - _GUI_Option("overlay-y"), _
+								$aPos[0] + _GUI_Option("overlay-x"), _
+								$aPos[1] + _GUI_Option("overlay-y"), _
+								$WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW, $WS_EX_CLIENTEDGE))
 	
     GUISetBkColor(0xABCDEF)
     _WinAPI_SetLayeredWindowAttributes($g_hOverlayGUI, 0xABCDEF, 255)
@@ -2034,19 +2039,14 @@ Func UpdateOverlayPosition()
     Local $hGameWindow = WinGetHandle("[CLASS:Diablo II]")
     If Not $hGameWindow Then Return
     
-    ; Hide overlay if game is minimized
-    Local $iStyle = _WinAPI_GetWindowLong($hGameWindow, $GWL_STYLE)
-    If BitAND($iStyle, $WS_MINIMIZE) Then
-        If $g_hOverlayGUI Then GUISetState(@SW_HIDE, $g_hOverlayGUI)
-        Return
-    Else
-        If $g_hOverlayGUI Then GUISetState(@SW_SHOWNOACTIVATE, $g_hOverlayGUI)
-    EndIf
-    
     Local $aPos = WinGetPos($hGameWindow)
     If Not @error Then
         ; Update overlay to match game window dimensions with margins
-        WinMove($g_hOverlayGUI, "", $aPos[0] + _GUI_Option("overlay-x"), $aPos[1], $aPos[2], $aPos[3])
+        WinMove($g_hOverlayGUI, "", _
+				$aPos[0] + _GUI_Option("overlay-x"), _
+				$aPos[1] + _GUI_Option("overlay-y"), _
+				$aPos[2] - _GUI_Option("overlay-x"), _
+				$aPos[3] - _GUI_Option("overlay-y"))
     EndIf
 EndFunc
 
@@ -2057,42 +2057,29 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     EndIf
 
     Local $iTextColor = $g_NotifierColorArray[$iColor]
-    
-    ; Get current overlay width for text sizing (90% width for margins)
     Local $aOverlayPos = WinGetPos($g_hOverlayGUI)
     Local $iTextWidth = $aOverlayPos[2]
     
     ; Remove Diablo II color codes (ÿcX)
     $sText = StringRegExpReplace($sText, "ÿc.", "")
-    
-    ; Calculate max characters per line (no need for GDI measurements)
-    Local $hTempDC = _WinAPI_GetDC($g_hOverlayGUI)
-    Local $hFont = _WinAPI_CreateFont(_GUI_Option("overlay-fontsize"), 0, 0, 0, $FW_NORMAL, False, False, False, $DEFAULT_CHARSET, _
-                                     $OUT_DEFAULT_PRECIS, $CLIP_DEFAULT_PRECIS, $ANTIALIASED_QUALITY, _
-                                     $DEFAULT_PITCH, "Courier New")
-    Local $hOldFont = _WinAPI_SelectObject($hTempDC, $hFont)
-    Local $iCharWidth = DllStructGetData(_WinAPI_GetTextExtentPoint32($hTempDC, "W"), "X") ; Measure 'W' (widest char)
-    _WinAPI_SelectObject($hTempDC, $hOldFont)
-    _WinAPI_DeleteObject($hFont)
-    _WinAPI_ReleaseDC($g_hOverlayGUI, $hTempDC)
 
     ; Split text into lines
-    Local $aSplitText = _SplitTextToWidth($sText, $hTempDC, $iTextWidth) ; Updated to use character count
-    
+    Local $aSplitText = _SplitTextToWidth($sText, $iTextWidth)
+
     ; Create labels for each line
     For $i = 0 To UBound($aSplitText) - 1
         Local $sLine = $aSplitText[$i]
-        If $sLine = "" Then ContinueLoop ; Skip empty lines (optional)
+        If $sLine = "" Then ContinueLoop ; Skip empty lines
 		
 		local $iRowHeight = Floor(_GUI_Option("overlay-fontsize") * 1.65)
         ; Background (black outline)
-        Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), _GUI_Option("overlay-x"), $g_iNextYPos, $iTextWidth, $iRowHeight)
+        Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
         GUICtrlSetColor($idLabelBg, 0x0A0A0A)
         GUICtrlSetBkColor($idLabelBg, $GUI_BKCOLOR_TRANSPARENT)
         GUICtrlSetFont($idLabelBg, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
         ; Foreground (colored text)
-        Local $idLabel = GUICtrlCreateLabel($sLine, _GUI_Option("overlay-x"), $g_iNextYPos, $iTextWidth, $iRowHeight)
+        Local $idLabel = GUICtrlCreateLabel($sLine, 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
         GUICtrlSetColor($idLabel, $iTextColor)
         GUICtrlSetBkColor($idLabel, $GUI_BKCOLOR_TRANSPARENT)
         GUICtrlSetFont($idLabel, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
@@ -2114,60 +2101,46 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     EndIf
 EndFunc
 
-Func _SplitTextToWidth($sText, $hDC, $iMaxWidth)
+Func _SplitTextToWidth($sText, $iMaxWidth)
     Local $aLines[0]
     
-    ; Approximate char width (monospace fonts have fixed width)
-    Local $tSize = _WinAPI_GetTextExtentPoint32($hDC, "W") ; Measure a single 'W' (widest char)
-    Local $iCharWidth = DllStructGetData($tSize, "X")
-    Local $iMaxChars = Int(($iMaxWidth* 1.3) / $iCharWidth) ; Max chars per line
+    ; Get average char width (monospace)
+    Local $iCharWidth = Floor((_GUI_Option("overlay-fontsize") * _GetDPI()[2]) * 0.85)
+    Local $iMaxChars = Floor($iMaxWidth / $iCharWidth)
     
-    ; Early exit if no splitting needed
-    If StringLen($sText) <= $iMaxChars Then
-        Return StringSplit($sText, @CRLF, $STR_ENTIRESPLIT + $STR_NOCOUNT)
-    EndIf
-    
-    ; Split by paragraphs (preserve original line breaks)
+    ; Split by paragraphs first
     Local $aParagraphs = StringSplit($sText, @CRLF, $STR_ENTIRESPLIT + $STR_NOCOUNT)
-    
+
     For $sParagraph In $aParagraphs
         $sParagraph = StringStripWS($sParagraph, $STR_STRIPLEADING + $STR_STRIPTRAILING)
-        If $sParagraph = "" Then 
+        If $sParagraph = "" Then
             ReDim $aLines[UBound($aLines) + 1]
-            $aLines[UBound($aLines) - 1] = "" ; Keep empty lines
+            $aLines[UBound($aLines) - 1] = ""
             ContinueLoop
         EndIf
-        
-        ; Split long paragraphs into lines
+
         While StringLen($sParagraph) > 0
-            ; If entire paragraph fits, use it as-is
+            ; Check if remaining text fits in max width
             If StringLen($sParagraph) <= $iMaxChars Then
                 ReDim $aLines[UBound($aLines) + 1]
                 $aLines[UBound($aLines) - 1] = $sParagraph
                 ExitLoop
             EndIf
             
-            ; Find the last delimiter (comma, semicolon, or space) within maxChars
-            Local $iSplitPos = 0
-            Local $aDelimiters = [",", ";", " "] ; Priority order
+            ; Get left part up to max chars
+            Local $sSegment = StringLeft($sParagraph, $iMaxChars)
             
-            For $sDelim In $aDelimiters
-                Local $iPos = StringInStr($sParagraph, $sDelim, 0, -1, $iMaxChars)
-                If $iPos > 0 And $iPos > $iSplitPos Then
-                    $iSplitPos = $iPos
-                EndIf
-            Next
+            ; Find the rightmost space character
+            Local $iSplitPos = StringInStr($sSegment, " ", 0, -1)
             
-            ; Fallback: Split at exact maxChars (mid-word if needed)
-            If $iSplitPos <= 0 Then
-                $iSplitPos = $iMaxChars
-            EndIf
+            ; If no space found, split at max chars (break word)
+            If $iSplitPos = 0 Then $iSplitPos = $iMaxChars
             
-            ; Extract the line and remaining text
+            ; Split the paragraph
             Local $sLine = StringLeft($sParagraph, $iSplitPos)
             $sParagraph = StringTrimLeft($sParagraph, $iSplitPos)
             
-            ; Trim whitespace and add
+            ; Trim whitespace and add to lines array
             $sLine = StringStripWS($sLine, $STR_STRIPTRAILING)
             $sParagraph = StringStripWS($sParagraph, $STR_STRIPLEADING)
             
@@ -2175,7 +2148,7 @@ Func _SplitTextToWidth($sText, $hDC, $iMaxWidth)
             $aLines[UBound($aLines) - 1] = $sLine
         WEnd
     Next
-    
+
     Return $aLines
 EndFunc
 
@@ -2189,7 +2162,7 @@ Func CleanUpExpiredText()
 
     Local $aMessagesToKeep[0][4]  ; Changed to 4 columns to match the new structure
     Local $bMessagesRemoved = False
-    Local $iNewYPos = _GUI_Option("overlay-y")
+    Local $iNewYPos = 0
 
     For $i = 0 To UBound($g_aMessages) - 1
         ; Check if message should expire
@@ -2201,8 +2174,8 @@ Func CleanUpExpiredText()
         Else
             ; Message stays - keep it and reposition if needed
             If $bMessagesRemoved Then
-                GUICtrlSetPos($g_aMessages[$i][0], _GUI_Option("overlay-x"), $iNewYPos)  ; Reposition background
-                GUICtrlSetPos($g_aMessages[$i][1], _GUI_Option("overlay-x"), $iNewYPos)  ; Reposition foreground
+                GUICtrlSetPos($g_aMessages[$i][0], 0, $iNewYPos)  ; Reposition background
+                GUICtrlSetPos($g_aMessages[$i][1], 0, $iNewYPos)  ; Reposition foreground
             EndIf
             
             ; Add to new array
@@ -2225,7 +2198,7 @@ Func CleanUpExpiredText()
     ; Stop cleanup timer if no more messages
     If UBound($g_aMessages) = 0 Then
         $g_bCleanupRunning = False
-        $g_iNextYPos = _GUI_Option("overlay-y")
+        $g_iNextYPos = 0
         AdlibUnRegister("CleanUpExpiredText")
     EndIf
 EndFunc
@@ -2245,7 +2218,7 @@ Func OverlayMain()
                 GUICtrlDelete($g_aMessages[$i][1])   ; Delete foreground label
             Next
             $g_aMessages = 0
-            $g_iNextYPos = _GUI_Option("overlay-y")
+            $g_iNextYPos = 0
             $g_bCleanupRunning = False
             AdlibUnRegister("CleanUpExpiredText")
         Else
