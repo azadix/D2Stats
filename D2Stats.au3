@@ -2028,7 +2028,7 @@ Func CreateOverlayWindow()
 								$aPos[3] - _GUI_Option("overlay-y"), _
 								$aPos[0] + _GUI_Option("overlay-x"), _
 								$aPos[1] + _GUI_Option("overlay-y"), _
-								$WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW, $WS_EX_CLIENTEDGE))
+								$WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 	
     GUISetBkColor(0xABCDEF)
     _WinAPI_SetLayeredWindowAttributes($g_hOverlayGUI, 0xABCDEF, 255)
