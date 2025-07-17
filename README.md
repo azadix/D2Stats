@@ -1,15 +1,17 @@
 # D2Stats
 
 ## Features
-- Read character/mercenary stats and display on external UI
+- Read character/mercenary stats
 - Check difference in stats between 2 states (Click 'Read' and after modifying stats click 'Diff' which display table of changed stats)
 - Set up rule list that check drops and notify the user when matching one drops
+- Play sound notification when goblin appears
 
 [Forum post](https://forum.median-xl.com/viewtopic.php?p=599923#p599923)
 
 ![D2Stats window screenshot](Assets/screenshot2.png "D2Stats window screenshot")
 ![D2Stats window screenshot](Assets/screenshot3.png "D2Stats window screenshot")
 ![D2Stats window screenshot](Assets/screenshot4.png "D2Stats window screenshot")
+![D2Stats window screenshot](Assets/screenshot5.png "D2Stats notifier example")
 
 ## FAQ
 ### "Windows defender/Antivirus removes/quarantines the exe file. Is it a virus?"
