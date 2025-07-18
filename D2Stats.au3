@@ -64,7 +64,7 @@ func DefineGlobals()
 
 	global $g_hScriptStartTime = TimerInit()
 	global $g_hOverlayGUI = 0
-	global $g_aMessages[0] ; Stores [GUI handle, GUI bg handle, expire time, height]
+	global $g_aMessages[1][4] = [[0]] ; Stores [GUI handle, GUI bg handle, expire time, height]
 	global $g_bCleanupRunning = False
 	global $g_iNextYPos;
 
@@ -2085,17 +2085,22 @@ Func PrintString($sText, $iColor = $ePrintWhite)
         GUICtrlSetFont($idLabel, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
         ; Store message data
-        ReDim $g_aMessages[UBound($g_aMessages) + 1][4]
-        $g_aMessages[UBound($g_aMessages) - 1][0] = $idLabelBg
-        $g_aMessages[UBound($g_aMessages) - 1][1] = $idLabel
-        $g_aMessages[UBound($g_aMessages) - 1][2] = TimerDiff($g_hScriptStartTime)
-        $g_aMessages[UBound($g_aMessages) - 1][3] = $iRowHeight
+		If Not IsArray($g_aMessages) Then
+            Local $g_aMessages[0][4]
+        EndIf
+
+		Local $iUBound = UBound($g_aMessages)
+        ReDim $g_aMessages[$iUBound + 1][4]
+        $g_aMessages[$iUBound][0] = $idLabelBg
+        $g_aMessages[$iUBound][1] = $idLabel
+        $g_aMessages[$iUBound][2] = TimerDiff($g_hScriptStartTime)
+        $g_aMessages[$iUBound][3] = $iRowHeight
 
         $g_iNextYPos += $iRowHeight
     Next
 
     ; Start cleanup timer if needed
-    If Not $g_bCleanupRunning And UBound($g_aMessages) > 0 Then
+    If Not $g_bCleanupRunning And IsArray($g_aMessages) And UBound($g_aMessages) > 0 Then
         $g_bCleanupRunning = True
         AdlibRegister("CleanUpExpiredText", 100)
     EndIf
@@ -2122,7 +2127,7 @@ Func _SplitTextToWidth($sText, $iMaxWidth)
         While StringLen($sParagraph) > 0
             ; Check if remaining text fits in max width
             If StringLen($sParagraph) <= $iMaxChars Then
-                ReDim $aLines[UBound($aLines) + 1]
+				ReDim $aLines[UBound($aLines) + 1]
                 $aLines[UBound($aLines) - 1] = $sParagraph
                 ExitLoop
             EndIf
@@ -2188,7 +2193,6 @@ Func CleanUpExpiredText()
             $iNewYPos += $g_aMessages[$i][3]
         EndIf
     Next
-
     ; Update global array and positions if messages were removed
     If $bMessagesRemoved Then
         $g_aMessages = $aMessagesToKeep
@@ -2217,7 +2221,7 @@ Func OverlayMain()
                 GUICtrlDelete($g_aMessages[$i][0])  ; Delete background label
                 GUICtrlDelete($g_aMessages[$i][1])   ; Delete foreground label
             Next
-            $g_aMessages = 0
+            $g_aMessages[0][4] = [[0]]
             $g_iNextYPos = 0
             $g_bCleanupRunning = False
             AdlibUnRegister("CleanUpExpiredText")
