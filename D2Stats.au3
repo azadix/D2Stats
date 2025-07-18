@@ -64,7 +64,7 @@ func DefineGlobals()
 
 	global $g_hScriptStartTime = TimerInit()
 	global $g_hOverlayGUI = 0
-	global $g_aMessages[1][4] = [[0]] ; Stores [GUI handle, GUI bg handle, expire time, height]
+	global $g_aMessages[0][4] ; Stores [GUI handle, GUI bg handle, expire time, height]
 	global $g_bCleanupRunning = False
 	global $g_iNextYPos;
 
@@ -2084,11 +2084,6 @@ Func PrintString($sText, $iColor = $ePrintWhite)
         GUICtrlSetBkColor($idLabel, $GUI_BKCOLOR_TRANSPARENT)
         GUICtrlSetFont($idLabel, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
-        ; Store message data
-		If Not IsArray($g_aMessages) Then
-            Local $g_aMessages[0][4]
-        EndIf
-
 		Local $iUBound = UBound($g_aMessages)
         ReDim $g_aMessages[$iUBound + 1][4]
         $g_aMessages[$iUBound][0] = $idLabelBg
@@ -2221,7 +2216,9 @@ Func OverlayMain()
                 GUICtrlDelete($g_aMessages[$i][0])  ; Delete background label
                 GUICtrlDelete($g_aMessages[$i][1])   ; Delete foreground label
             Next
-            $g_aMessages[0][4] = [[0]]
+
+			ReDim $g_aMessages[0][4]
+
             $g_iNextYPos = 0
             $g_bCleanupRunning = False
             AdlibUnRegister("CleanUpExpiredText")
