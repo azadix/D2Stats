@@ -29,7 +29,6 @@
 #pragma compile(ProductVersion, {{version}})
 #pragma compile(FileVersion, {{version}})
 #pragma compile(Comments, {{buildTime}})
-#pragma compile(UPX, True) ;compression
 #pragma compile(inputboxres, True)
 
 
@@ -1941,7 +1940,7 @@ func OnClick_VolumeTest()
 endfunc
 
 func OnClick_Forum()
-	ShellExecute("https://forum.median-xl.com/viewtopic.php?f=4&t=83520")
+	ShellExecute("https://forum.median-xl.com/viewtopic.php?f=4&t=85654")
 endfunc
 
 Func OptionsScrollUp()
