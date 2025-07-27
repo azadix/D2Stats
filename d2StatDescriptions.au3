@@ -90,7 +90,7 @@ global $g_d2StatNames[][5] = [ _
 		[85, "", True, "#% To Experience Gained", True], _
 		[86, "", True, "+# Life After Each Kill", True], _
 		[87, "", True, "+#% to All Vendor prices", True], _
-		[88, "", False, "", False], _
+		[88, "", False, "Achievement data", False], _
 		[89, "", True, "+# to Light Radius", True], _
 		[90, "", True, "", True], _
 		[91, "", True, "Requirements #%", True], _
@@ -99,7 +99,7 @@ global $g_d2StatNames[][5] = [ _
 		[94, "", True, "", True], _
 		[95, "", True, "", True], _
 		[96, "", True, "#% Movement Speed", True], _
-		[97, "", True, "+# to [SKILL]", True], _
+		[97, "", True, "+# to [OSKILL]", True], _
 		[98, "", True, "", True], _
 		[99, "", True, "#% Hit Recovery", True], _
 		[100, "", True, "", True], _
@@ -109,7 +109,7 @@ global $g_d2StatNames[][5] = [ _
 		[104, "", True, "", True], _
 		[105, "", True, "#% Cast Speed", True], _
 		[106, "", True, "", True], _
-		[107, "", True, "+# to [SKILL]", True], _
+		[107, "", True, "+# to [CLASS_SKILL]", True], _
 		[108, "", True, "Slain Monsters Rest In Peace (0/1)", True], _
 		[109, "", True, "Curse Length Reduction: #%", True], _
 		[110, "", True, "Poison Length Reduction: #%", True], _
@@ -272,7 +272,7 @@ global $g_d2StatNames[][5] = [ _
 		[267, "", True, "", True], _
 		[268, "", True, "", True], _
 		[269, "", True, "", True], _
-		[270, "", True, "", True], _
+		[270, "", True, "Summon Edyrem skill (0/1)", True], _
 		[271, "", True, "#% Chance to cast [SKILL] when you die", True], _
 		[272, "", True, "", True], _
 		[273, "", True, "#% Chance to Crush attacker", True], _
@@ -311,7 +311,7 @@ global $g_d2StatNames[][5] = [ _
 		[306, "", True, "", True], _
 		[307, "", True, "", True], _
 		[308, "", True, "", True], _
-		[309, "", True, "", True], _
+		[309, "", True, "Cooldown Reduction ???", True], _
 		[310, "", True, "", True], _
 		[311, "", True, "", True], _
 		[312, "", True, "", True], _
@@ -454,9 +454,9 @@ global $g_d2StatNames[][5] = [ _
 		[449, "", True, "", True], _
 		[450, "", True, "Trophy amount", True], _
 		[451, "", True, "", True], _
-		[452, "", True, "", True], _
-		[453, "", True, "", True], _
-		[454, "", True, "", True], _
+		[452, "", True, "Cube upgrade 1 ???", True], _
+		[453, "", True, "Cube upgrade 2 ???", True], _
+		[454, "", True, "Cube upgrade 3 ???", True], _
 		[455, "", True, "Sunstone of the Twin Seas resist scroll amount (0-3), Dulra Aegis upgrade amount (0-3)", True], _
 		[456, "", True, "", True], _
 		[457, "", True, "", True], _
@@ -465,7 +465,7 @@ global $g_d2StatNames[][5] = [ _
 		[460, "", True, "", True], _
 		[461, "", True, "", True], _
 		[462, "", True, "+#% Bonus damage to Vessel of Judgement", True], _
-		[463, "", True, "", True], _
+		[463, "", True, "Class restriction ???", True], _
 		[464, "", True, "", True], _
 		[465, "", True, "", True], _
 		[466, "", True, "Unused Essence slots amount (Umbaru Treasure)", True], _
