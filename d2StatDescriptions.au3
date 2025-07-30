@@ -393,7 +393,7 @@ global $g_d2StatNames[][5] = [ _
 		[388, "", True, "+#% Bonus Elemental Damage to Mark of the Wild", True], _
 		[389, "", True, "+#% Duration Bonus to Mark of the Wild", True], _
 		[390, "", True, "Already enchanted amount", False], _
-		[391, "", True, "", True], _
+		[391, "", True, "Mirrored amount", True], _
 		[392, "", True, "", True], _
 		[393, "", True, "", True], _
 		[394, "", True, "", True], _
@@ -429,9 +429,9 @@ global $g_d2StatNames[][5] = [ _
 		[424, "", True, "", True], _
 		[425, "", True, "", True], _
 		[426, "", True, "", True], _
-		[427, "", True, "", True], _
-		[428, "", True, "", True], _
-		[429, "", True, "", True], _
+		[427, "", True, "Activation Frequency", True], _
+		[428, "", True, "+# to Maximum Exodia minions", True], _
+		[429, "", True, "+# to Maximum Paladin minions", True], _
 		[430, "", True, "", True], _
 		[431, "", True, "+#% Bonus to Poison skill duration", True], _
 		[432, "", True, "", True], _
