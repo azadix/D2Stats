@@ -2401,6 +2401,7 @@ func CreateGUI()
 
 	global $g_idNotifyEdit = GUICtrlCreateEdit("", 4, _GUI_LineY(2), $g_iGUIWidth - 8, $iBottomButtonCoords - _GUI_LineY(2) - 5)
 	GUICtrlSetResizing (-1, $GUI_DOCKAUTO)
+	GUICtrlSetLimit(-1, 2147483647)
 	
 	global $g_idNotifySave = GUICtrlCreateButton("Save", 4 + 0*62, $iBottomButtonCoords, 60, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_NotifySave")

@@ -311,7 +311,7 @@ global $g_d2StatNames[][5] = [ _
 		[306, "", True, "", True], _
 		[307, "", True, "", True], _
 		[308, "", True, "", True], _
-		[309, "", True, "Cooldown Reduction ???", True], _
+		[309, "", True, "", True], _
 		[310, "", True, "", True], _
 		[311, "", True, "", True], _
 		[312, "", True, "", True], _
@@ -350,7 +350,7 @@ global $g_d2StatNames[][5] = [ _
 		[345, "", True, "", True], _
 		[346, "", True, "", True], _
 		[347, "", True, "", True], _
-		[348, "", True, "", True], _
+		[348, "", True, "#% Chance to block attacks and spells while wielding two claws", True], _
 		[349, "", True, "", True], _
 		[350, "", False, "", False], _
 		[351, "", False, "", False], _
@@ -465,7 +465,7 @@ global $g_d2StatNames[][5] = [ _
 		[460, "", True, "", True], _
 		[461, "", True, "", True], _
 		[462, "", True, "+#% Bonus damage to Vessel of Judgement", True], _
-		[463, "", True, "Class restriction ???", True], _
+		[463, "", True, "", True], _
 		[464, "", True, "", True], _
 		[465, "", True, "", True], _
 		[466, "", True, "Unused Essence slots amount (Umbaru Treasure)", True], _
