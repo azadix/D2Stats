@@ -2004,34 +2004,79 @@ Func IsGameWindowPresent()
     Local $hGameWindow = WinGetHandle("[CLASS:Diablo II]")
     If Not $hGameWindow Then Return False
     
-    ; Check if window is minimized
+    ; Check if window exists and is visible
+    If Not WinExists($hGameWindow) Or Not WinGetState($hGameWindow) Then Return False
+    
+    ; Check if window is minimized or hidden
     Local $iStyle = _WinAPI_GetWindowLong($hGameWindow, $GWL_STYLE)
     If BitAND($iStyle, $WS_MINIMIZE) Then Return False
+    
+    ; Additional check for fullscreen (window position off-screen)
+    Local $aPos = WinGetPos($hGameWindow)
+    If @error Or $aPos[0] <= -32000 Or $aPos[1] <= -32000 Then Return False
     
     Return True
 EndFunc
 
 Func CreateOverlayWindow()
-    If $g_hOverlayGUI <> 0 Then Return
+    If $g_hOverlayGUI <> 0 Then
+        ; Overlay already exists, ensure it's valid
+        If WinExists($g_hOverlayGUI) Then Return
+        ; If not valid, reset
+        $g_hOverlayGUI = 0
+    EndIf
     
     Local $hGameWindow = WinGetHandle("[CLASS:Diablo II]")
     If Not $hGameWindow Then Return
     
     Local $aPos = WinGetPos($hGameWindow)
     If @error Then Return
+    
+    ; Store current position for recovery
     $g_iNextYPos = 0
 
     ; Create overlay covering full game width with small margins
     $g_hOverlayGUI = GUICreate("D2StatsOverlay", _
-								$aPos[2] - _GUI_Option("overlay-x"), _
-								$aPos[3] - _GUI_Option("overlay-y"), _
-								$aPos[0] + _GUI_Option("overlay-x"), _
-								$aPos[1] + _GUI_Option("overlay-y"), _
-								$WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
-	
+                                $aPos[2] - _GUI_Option("overlay-x"), _
+                                $aPos[3] - _GUI_Option("overlay-y"), _
+                                $aPos[0] + _GUI_Option("overlay-x"), _
+                                $aPos[1] + _GUI_Option("overlay-y"), _
+                                $WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+    
+    If @error Then
+        $g_hOverlayGUI = 0
+        Return
+    Endif
+    
     GUISetBkColor(0xABCDEF)
     _WinAPI_SetLayeredWindowAttributes($g_hOverlayGUI, 0xABCDEF, 255)
+    
+    ; Set font for all controls
+    GUISetFont(_GUI_Option("overlay-fontsize"), 0, 0, "Courier New")
+    
     GUISetState(@SW_SHOWNOACTIVATE, $g_hOverlayGUI)
+    
+    ; Verify the window was created successfully
+    If Not WinExists($g_hOverlayGUI) Then
+        $g_hOverlayGUI = 0
+    EndIf
+EndFunc
+
+Func RecoverOverlay()
+    If $g_hOverlayGUI <> 0 And Not WinExists($g_hOverlayGUI) Then
+        ; Overlay window exists in code but not actually visible
+        GUIDelete($g_hOverlayGUI)
+        $g_hOverlayGUI = 0
+        ; Clear all messages
+        For $i = 0 To UBound($g_aMessages) - 1
+            GUICtrlDelete($g_aMessages[$i][0])
+            GUICtrlDelete($g_aMessages[$i][1])
+        Next
+        ReDim $g_aMessages[0][4]
+        $g_iNextYPos = 0
+        $g_bCleanupRunning = False
+        AdlibUnRegister("CleanUpExpiredText")
+    EndIf
 EndFunc
 
 Func UpdateOverlayPosition()
@@ -2202,10 +2247,26 @@ Func CleanUpExpiredText()
 EndFunc
 
 Func OverlayMain()
+    Static $iRecoveryCounter = 0
+    
+    ; Try to recover overlay if needed (check every 10 cycles)
+    $iRecoveryCounter += 1
+    If $iRecoveryCounter >= 100 Then
+        RecoverOverlay()
+        $iRecoveryCounter = 0
+    EndIf
+
     ; Find the game window if we haven't already
     If $g_hOverlayGUI = 0 And IsGameWindowPresent() Then
         CreateOverlayWindow()
     ElseIf $g_hOverlayGUI <> 0 Then
+        ; Check if overlay window still exists
+        If Not WinExists($g_hOverlayGUI) Then
+            ; Mark overlay as invalid for next recovery cycle
+            $g_hOverlayGUI = 0
+            Return
+        EndIf
+        
         ; Check if game window still exists or is minimized
         If Not IsGameWindowPresent() Then
             GUIDelete($g_hOverlayGUI)
@@ -2215,15 +2276,18 @@ Func OverlayMain()
                 GUICtrlDelete($g_aMessages[$i][0])  ; Delete background label
                 GUICtrlDelete($g_aMessages[$i][1])   ; Delete foreground label
             Next
-
-			ReDim $g_aMessages[0][4]
-
+            ReDim $g_aMessages[0][4]
             $g_iNextYPos = 0
             $g_bCleanupRunning = False
             AdlibUnRegister("CleanUpExpiredText")
         Else
             ; Update overlay position and visibility
             UpdateOverlayPosition()
+            
+            ; Ensure overlay stays on top
+            If WinGetState($g_hOverlayGUI) <> @SW_SHOWNOACTIVATE Then
+                WinSetState($g_hOverlayGUI, "", @SW_SHOWNOACTIVATE)
+            EndIf
         EndIf
     EndIf
 EndFunc
