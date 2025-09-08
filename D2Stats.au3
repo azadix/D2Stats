@@ -5,6 +5,7 @@
 #include <GuiSlider.au3>
 #include <HotKey.au3>
 #include <HotKeyInput.au3>
+#include <GuiListView.au3>
 #include <Misc.au3>
 #include <NomadMemory.au3>
 #include <WinAPI.au3>
@@ -382,36 +383,126 @@ func HotKey_ReadStats()
 endfunc
 
 func CompareStats()
-	UpdateStatValues()
-	UpdateGUI()
-	
-	;Compare stats
-	local $statDiffCount = 0
-	local $g_statDiff[0][5]
-	for $i = 0 To $g_iNumStats - 1	
-		if (($g_aiStatsCacheCopy[0][$i] <> $g_aiStatsCache[0][$i]) AND $g_d2StatNames[$i][2] == True) then
-			_ArrayAdd($g_statDiff,$i &"|"& _
-								$g_d2StatNames[$i][1] &"|"& _
-								$g_aiStatsCacheCopy[0][$i] &"|"& _
-								$g_aiStatsCache[0][$i] &"|"& _
-								$g_aiStatsCache[0][$i]-$g_aiStatsCacheCopy[0][$i])
-			$statDiffCount += 1
-		endif
-		if (($g_aiStatsCacheCopy[1][$i] <> $g_aiStatsCache[1][$i]) AND $g_d2StatNames[$i][4] == True) then
-			_ArrayAdd($g_statDiff,$i &"|"& _
-								$g_d2StatNames[$i][3] &"|"& _
-								$g_aiStatsCacheCopy[1][$i] &"|"& _
-								$g_aiStatsCache[1][$i] &"|"& _
-								$g_aiStatsCache[1][$i]-$g_aiStatsCacheCopy[1][$i])
-			$statDiffCount += 1
-		endif
-	next
-	
-	if ($statDiffCount > 0) then
-		_ArrayDisplay($g_statDiff, "Stat diff", default, 32, @LF, "Stat ID|Name|Old|New|Diff")
-	endif
-	
-	$g_aiStatsCacheCopy = $g_aiStatsCache
+    UpdateStatValues()
+    UpdateGUI()
+    
+    ;Compare stats
+    local $statDiffCount = 0
+    local $g_statDiff[0][5]
+    for $i = 0 To $g_iNumStats - 1    
+        if (($g_aiStatsCacheCopy[0][$i] <> $g_aiStatsCache[0][$i]) AND $g_d2StatNames[$i][2] == True) then
+            _ArrayAdd($g_statDiff, $i & "|" & _
+                                $g_d2StatNames[$i][1] & "|" & _
+                                $g_aiStatsCacheCopy[0][$i] & "|" & _
+                                $g_aiStatsCache[0][$i] & "|" & _
+                                $g_aiStatsCache[0][$i]-$g_aiStatsCacheCopy[0][$i])
+            $statDiffCount += 1
+        endif
+        if (($g_aiStatsCacheCopy[1][$i] <> $g_aiStatsCache[1][$i]) AND $g_d2StatNames[$i][4] == True) then
+            _ArrayAdd($g_statDiff, $i & "|" & _
+                                $g_d2StatNames[$i][3] & "|" & _
+                                $g_aiStatsCacheCopy[1][$i] & "|" & _
+                                $g_aiStatsCache[1][$i] & "|" & _
+                                $g_aiStatsCache[1][$i]-$g_aiStatsCacheCopy[1][$i])
+            $statDiffCount += 1
+        endif
+    next
+    
+    if ($statDiffCount > 0) then
+        ; Create our own dialog instead of using _ArrayDisplay
+        ShowStatDiffDialog($g_statDiff)
+    else
+        PrintString("No stat differences found.", $ePrintBlue)
+    endif
+    
+    $g_aiStatsCacheCopy = $g_aiStatsCache
+endfunc
+
+func ShowStatDiffDialog($aStats)
+    ; Store current option settings
+    Local $oldOptGUIOnEventMode = Opt("GUIOnEventMode", 0)
+    Local $oldOptGUICloseOnESC = Opt("GUICloseOnESC", 1)
+    
+    Local $hDiffGUI = GUICreate("Stat Differences", 850, 400, -1, -1, BitOR($WS_CAPTION, $WS_POPUPWINDOW, $WS_SIZEBOX), $WS_EX_TOOLWINDOW, $g_hGUI)
+    
+    If $hDiffGUI = 0 Then
+        ConsoleWrite("ERROR: Failed to create dialog window" & @CRLF)
+        Opt("GUIOnEventMode", $oldOptGUIOnEventMode)
+        Opt("GUICloseOnESC", $oldOptGUICloseOnESC)
+        Return
+    EndIf
+    
+    GUISetFont(9, 400, 0, "Courier New")
+    GUISetBkColor(0xFFFFFF)
+    
+    Local $idList = GUICtrlCreateListView("ID|Name|Old|New|Diff", 10, 10, 830, 350)
+    GUICtrlSetFont(-1, 9, 400, 0, "Courier New")
+    GUICtrlSetBkColor(-1, 0xFFFFFF)
+    
+    _GUICtrlListView_SetExtendedListViewStyle($idList, BitOR($LVS_EX_GRIDLINES, $LVS_EX_FULLROWSELECT))
+
+    ; Set column widths
+    _GUICtrlListView_SetColumnWidth($idList, 0, 60)   ; Stat ID
+    _GUICtrlListView_SetColumnWidth($idList, 1, 450)  ; Name
+    _GUICtrlListView_SetColumnWidth($idList, 2, 80)   ; Old
+    _GUICtrlListView_SetColumnWidth($idList, 3, 80)   ; New
+    _GUICtrlListView_SetColumnWidth($idList, 4, 80)   ; Diff
+    
+    ; Add data to listview
+    For $i = 0 To UBound($aStats) - 1
+        GUICtrlCreateListViewItem($aStats[$i][0] & "|" & $aStats[$i][1] & "|" & $aStats[$i][2] & "|" & $aStats[$i][3] & "|" & $aStats[$i][4], $idList)
+    Next
+    
+    Local $idClose = GUICtrlCreateButton("Close", 375, 370, 100, 25)
+    
+    ; Show the dialog
+    GUISetState(@SW_SHOW, $hDiffGUI)
+    
+    ; Force focus to the dialog
+    WinActivate($hDiffGUI)
+    
+    ; Message loop with proper message handling
+    Local $iMsg = 0
+    While 1
+        $iMsg = GUIGetMsg(1) ; Use advanced mode to get message and window ID
+        
+        ; Check if our dialog was closed
+        If Not WinExists($hDiffGUI) Then
+            ExitLoop
+        EndIf
+        
+        ; Process messages for our dialog
+        If $iMsg[0] <> 0 And $iMsg[1] = $hDiffGUI Then
+            Switch $iMsg[0]
+                Case $GUI_EVENT_CLOSE
+                    ExitLoop
+                Case $idClose
+                    ExitLoop
+            EndSwitch
+        EndIf
+        
+        ; Also check for ESC key
+        If _IsPressed("1B") Then ; ESC key
+            ExitLoop
+        EndIf
+        
+        Sleep(10)
+    WEnd
+    
+    ; Cleanup
+    GUIDelete($hDiffGUI)
+    
+    ; Restore original options
+    Opt("GUIOnEventMode", $oldOptGUIOnEventMode)
+    Opt("GUICloseOnESC", $oldOptGUICloseOnESC)
+	RecoverOverlay()
+endfunc
+
+func CloseStatDiffDialog()
+    If $g_hStatDiffGUI <> 0 Then
+        GUIDelete($g_hStatDiffGUI)
+        $g_hStatDiffGUI = 0
+    EndIf
 endfunc
 #EndRegion
 
