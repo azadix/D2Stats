@@ -422,20 +422,21 @@ func ShowStatDiffDialog($aStats)
     ; Store current option settings
     Local $oldOptGUIOnEventMode = Opt("GUIOnEventMode", 0)
     Local $oldOptGUICloseOnESC = Opt("GUICloseOnESC", 1)
-    
-    Local $hDiffGUI = GUICreate("Stat Differences", 850, 400, -1, -1, BitOR($WS_CAPTION, $WS_POPUPWINDOW, $WS_SIZEBOX), $WS_EX_TOOLWINDOW, $g_hGUI)
+
+    ; Check overlay state before creating dialog
+    Local $bOverlayWasVisible = ($g_hOverlayGUI <> 0 And WinExists($g_hOverlayGUI))    
+    Local $hDiffGUI = GUICreate("Stat Differences", 860, 600, -1, -1, BitOR($WS_CAPTION, $WS_POPUPWINDOW, $WS_SIZEBOX), $WS_EX_TOOLWINDOW, $g_hGUI)
     
     If $hDiffGUI = 0 Then
-        ConsoleWrite("ERROR: Failed to create dialog window" & @CRLF)
         Opt("GUIOnEventMode", $oldOptGUIOnEventMode)
         Opt("GUICloseOnESC", $oldOptGUICloseOnESC)
         Return
     EndIf
-    
+
     GUISetFont(9, 400, 0, "Courier New")
     GUISetBkColor(0xFFFFFF)
     
-    Local $idList = GUICtrlCreateListView("ID|Name|Old|New|Diff", 10, 10, 830, 350)
+    Local $idList = GUICtrlCreateListView("ID|Name|Old|New|Diff", 10, 10, 840, 550)
     GUICtrlSetFont(-1, 9, 400, 0, "Courier New")
     GUICtrlSetBkColor(-1, 0xFFFFFF)
     
@@ -447,56 +448,61 @@ func ShowStatDiffDialog($aStats)
     _GUICtrlListView_SetColumnWidth($idList, 2, 80)   ; Old
     _GUICtrlListView_SetColumnWidth($idList, 3, 80)   ; New
     _GUICtrlListView_SetColumnWidth($idList, 4, 80)   ; Diff
-    
+
     ; Add data to listview
     For $i = 0 To UBound($aStats) - 1
         GUICtrlCreateListViewItem($aStats[$i][0] & "|" & $aStats[$i][1] & "|" & $aStats[$i][2] & "|" & $aStats[$i][3] & "|" & $aStats[$i][4], $idList)
     Next
-    
-    Local $idClose = GUICtrlCreateButton("Close", 375, 370, 100, 25)
-    
-    ; Show the dialog
+
+    Local $idClose = GUICtrlCreateButton("Close", 380, 570, 100, 25)
+
     GUISetState(@SW_SHOW, $hDiffGUI)
-    
-    ; Force focus to the dialog
     WinActivate($hDiffGUI)
     
-    ; Message loop with proper message handling
-    Local $iMsg = 0
-    While 1
-        $iMsg = GUIGetMsg(1) ; Use advanced mode to get message and window ID
-        
-        ; Check if our dialog was closed
-        If Not WinExists($hDiffGUI) Then
-            ExitLoop
-        EndIf
-        
-        ; Process messages for our dialog
-        If $iMsg[0] <> 0 And $iMsg[1] = $hDiffGUI Then
-            Switch $iMsg[0]
-                Case $GUI_EVENT_CLOSE
-                    ExitLoop
-                Case $idClose
-                    ExitLoop
-            EndSwitch
-        EndIf
-        
-        ; Also check for ESC key
-        If _IsPressed("1B") Then ; ESC key
-            ExitLoop
-        EndIf
-        
-        Sleep(10)
-    WEnd
-    
+    ; Message loop
+	Local $iMsg = 0
+	Local $iLoopCount = 0
+
+	While WinExists($hDiffGUI)
+		; Only process messages occasionally to reduce CPU usage
+		If Mod($iLoopCount, 5) = 0 Then
+			$iMsg = GUIGetMsg(1)
+			
+			If $iMsg[0] <> 0 And $iMsg[1] = $hDiffGUI Then
+				
+				Switch $iMsg[0]
+					Case $GUI_EVENT_CLOSE
+						ExitLoop
+					Case $idClose
+						ExitLoop
+				EndSwitch
+			EndIf
+		EndIf
+		
+		; Check for ESC key
+		If _IsPressed("1B") Then ; ESC key
+			ExitLoop
+		EndIf
+		
+		$iLoopCount += 1
+		Sleep(5)
+	WEnd
+
     ; Cleanup
-    GUIDelete($hDiffGUI)
-    
+	GUIDelete($hDiffGUI)
+
     ; Restore original options
     Opt("GUIOnEventMode", $oldOptGUIOnEventMode)
     Opt("GUICloseOnESC", $oldOptGUICloseOnESC)
-	RecoverOverlay()
-endfunc
+    
+    ; Call overlay recovery
+    RecoverOverlay()
+
+    If Not $g_bCleanupRunning Then
+		AdlibRegister("CleanUpExpiredText", 100)
+		$g_bCleanupRunning = True
+	EndIf
+EndFunc
 
 func CloseStatDiffDialog()
     If $g_hStatDiffGUI <> 0 Then
@@ -2110,12 +2116,7 @@ Func IsGameWindowPresent()
 EndFunc
 
 Func CreateOverlayWindow()
-    If $g_hOverlayGUI <> 0 Then
-        ; Overlay already exists, ensure it's valid
-        If WinExists($g_hOverlayGUI) Then Return
-        ; If not valid, reset
-        $g_hOverlayGUI = 0
-    EndIf
+    If $g_hOverlayGUI <> 0 Then Return
     
     Local $hGameWindow = WinGetHandle("[CLASS:Diablo II]")
     If Not $hGameWindow Then Return
@@ -2123,9 +2124,6 @@ Func CreateOverlayWindow()
     Local $aPos = WinGetPos($hGameWindow)
     If @error Then Return
     
-    ; Store current position for recovery
-    $g_iNextYPos = 0
-
     ; Create overlay covering full game width with small margins
     $g_hOverlayGUI = GUICreate("D2StatsOverlay", _
                                 $aPos[2] - _GUI_Option("overlay-x"), _
@@ -2134,39 +2132,35 @@ Func CreateOverlayWindow()
                                 $aPos[1] + _GUI_Option("overlay-y"), _
                                 $WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
     
-    If @error Then
+    If @error Or $g_hOverlayGUI = 0 Then
         $g_hOverlayGUI = 0
         Return
-    Endif
-    
+    EndIf
     GUISetBkColor(0xABCDEF)
     _WinAPI_SetLayeredWindowAttributes($g_hOverlayGUI, 0xABCDEF, 255)
-    
-    ; Set font for all controls
-    GUISetFont(_GUI_Option("overlay-fontsize"), 0, 0, "Courier New")
-    
     GUISetState(@SW_SHOWNOACTIVATE, $g_hOverlayGUI)
-    
-    ; Verify the window was created successfully
-    If Not WinExists($g_hOverlayGUI) Then
-        $g_hOverlayGUI = 0
-    EndIf
 EndFunc
 
 Func RecoverOverlay()
-    If $g_hOverlayGUI <> 0 And Not WinExists($g_hOverlayGUI) Then
-        ; Overlay window exists in code but not actually visible
+    ; Always completely recreate the overlay after modal dialogs
+    If $g_hOverlayGUI <> 0 Then
         GUIDelete($g_hOverlayGUI)
-        $g_hOverlayGUI = 0
-        ; Clear all messages
-        For $i = 0 To UBound($g_aMessages) - 1
-            GUICtrlDelete($g_aMessages[$i][0])
-            GUICtrlDelete($g_aMessages[$i][1])
-        Next
-        ReDim $g_aMessages[0][4]
-        $g_iNextYPos = 0
-        $g_bCleanupRunning = False
-        AdlibUnRegister("CleanUpExpiredText")
+    EndIf
+    
+    ; Reset state
+    $g_hOverlayGUI = 0
+    $g_iNextYPos = 0
+    ReDim $g_aMessages[0][4]
+    $g_bCleanupRunning = False
+    AdlibUnRegister("CleanUpExpiredText")
+    
+    ; Create new overlay
+    CreateOverlayWindow()
+    
+    ; Restart cleanup timer
+    If $g_hOverlayGUI <> 0 Then
+        AdlibRegister("CleanUpExpiredText", 100)
+        $g_bCleanupRunning = True
     EndIf
 EndFunc
 
