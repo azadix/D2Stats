@@ -128,9 +128,13 @@ func DefineGlobals()
 	global $g_bHotkeysEnabled = False
 	global $g_hTimerCopyName = 0
 	global $g_sCopyName = ""
+	global $g_bNotifierLogVisible = False
+	global $g_aNotifierLogLines[0]
+	global $g_aOverlayHistory[0][2]  ; [text, color, timestamp] - stores last overlay messages (max visible lines)
+	global $g_bOverlayHistoryMode = False  ; Flag to indicate we're in history display mode
 
 	global const $g_iGUIOptionsGeneral = 14
-	global const $g_iGUIOptionsHotkey = 3
+	global const $g_iGUIOptionsHotkey = 4
 
 	global $g_avGUIOptionList[][5] = [ _
 		["nopickup", 0, "cb", "Automatically enable /nopickup"], _
@@ -150,6 +154,7 @@ func DefineGlobals()
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem"], _
 		["copy-name", 0, "cb", "Only copy item name"], _
 		["readstats", 0x0000, "hk", "Read stats without tabbing out of the game", "HotKey_ReadStats"], _
+		["show-notifier-log", 0x004E, "hk", "Show notifier log", "HotKey_ShowNotifierLog"], _
 		["notify-text", $g_sNotifyTextDefault, "tx"], _
 		["selectedNotifierRulesName", "Default", "tx"] _
 	]
@@ -174,7 +179,7 @@ func Main()
 	local $bIsIngame
 
 	while 1
-		Sleep(20)
+		Sleep(100)
 
 		OverlayMain()
 
@@ -234,8 +239,20 @@ func _CloseHandle()
 endfunc
 
 func UpdateHandle()
+	; Cache window handle to reduce expensive WinGetHandle calls
+	Static $hCachedWnd = 0
+	Static $iLastHandleCheck = 0
+	
+	; Only check for new window every 1 second
+	If TimerDiff($iLastHandleCheck) < 1000 And $hCachedWnd <> 0 Then
+		Local $iPID = WinGetProcess($hCachedWnd)
+		If $iPID <> -1 And $iPID == $g_iD2pid Then Return
+	EndIf
+	
+	$iLastHandleCheck = TimerInit()
 	local $hWnd = WinGetHandle("[CLASS:Diablo II]")
 	local $iPID = WinGetProcess($hWnd)
+	$hCachedWnd = $hWnd
 
 	if ($iPID == -1) then return _CloseHandle()
 	if ($iPID == $g_iD2pid) then return
@@ -380,6 +397,58 @@ func HotKey_ReadStats()
 	UpdateGUI()
 
 	$g_aiStatsCacheCopy = $g_aiStatsCache
+endfunc
+
+func HotKey_ShowNotifierLog()
+	if (not IsIngame()) then return
+	
+	$g_bNotifierLogVisible = not $g_bNotifierLogVisible
+	
+	if ($g_bNotifierLogVisible) then
+		; Clear current overlay first
+		if ($g_hOverlayGUI <> 0) then
+			for $i = 0 to UBound($g_aMessages) - 1
+				GUICtrlDelete($g_aMessages[$i][0])
+				GUICtrlDelete($g_aMessages[$i][1])
+			next
+			ReDim $g_aMessages[0][4]
+			$g_iNextYPos = 0
+			$g_bCleanupRunning = False
+			AdlibUnRegister("CleanUpExpiredText")
+		endif
+		
+		; Set history mode flag
+		$g_bOverlayHistoryMode = True
+		
+		; Show header first
+		PrintString("--- Overlay History (Press again to hide) ---", $ePrintYellow)
+		
+		; Then show overlay history (newest first)
+		local $iHistorySize = UBound($g_aOverlayHistory)
+		if ($iHistorySize > 0) then
+			for $i = 0 to $iHistorySize - 1
+				PrintString($g_aOverlayHistory[$i][0], $g_aOverlayHistory[$i][1])
+			next
+		else
+			PrintString("No overlay history available.", $ePrintGrey)
+		endif
+		
+		; Clear history mode flag
+		$g_bOverlayHistoryMode = False
+	else
+		; Hide log by clearing overlay messages
+		if ($g_hOverlayGUI <> 0) then
+			; Clear all messages
+			for $i = 0 to UBound($g_aMessages) - 1
+				GUICtrlDelete($g_aMessages[$i][0])
+				GUICtrlDelete($g_aMessages[$i][1])
+			next
+			ReDim $g_aMessages[0][4]
+			$g_iNextYPos = 0
+			$g_bCleanupRunning = False
+			AdlibUnRegister("CleanUpExpiredText")
+		endif
+	endif
 endfunc
 
 func CompareStats()
@@ -1017,7 +1086,7 @@ func NotifierMain()
 	local $iUnitType, $iClass, $iUnitId, $iQuality, $iFileIndex, $iEarLevel, $iFlags, $iTierFlag
 	local $bIsEthereal
 	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsColour, $iFlagsSound, $iFlagsDisplayName, $iFlagsDisplayStat
-	local $sType, $sText
+	local $sType
 
 	local $tUnitAny = DllStructCreate("dword iUnitType;dword iClass;dword pad1;dword dwUnitId;dword pad2;dword pUnitData;dword pad3[52];dword pUnit;")
 	local $tItemData = DllStructCreate("dword iQuality;dword pad1[5];dword iFlags;dword pad2[3];dword dwFileIndex; dword pad2[7];byte iEarLevel;")
@@ -2194,13 +2263,45 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 
     ; Split text into lines
     Local $aSplitText = _SplitTextToWidth($sText, $iTextWidth)
-
+	; Calculate row height based on font size
+	local $iRowHeight = Floor(_GUI_Option("overlay-fontsize") * 1.65)
+	
+	; Store in overlay history (keep max visible lines) - but not when in history mode
+	; Do this once per message, not per line
+	If Not $g_bOverlayHistoryMode Then
+		; Calculate max lines based on overlay height
+		Local $iMaxLines = Floor($aOverlayPos[3] / $iRowHeight)
+		Local $iHistorySize = UBound($g_aOverlayHistory)
+		
+		; Add all lines of this message as a group at the beginning (newest first)
+		ReDim $g_aOverlayHistory[$iHistorySize + UBound($aSplitText)][2]
+		
+		; Shift existing messages down to make room for new messages at the beginning
+		For $j = $iHistorySize + UBound($aSplitText) - 1 To UBound($aSplitText) Step -1
+			$g_aOverlayHistory[$j][0] = $g_aOverlayHistory[$j - UBound($aSplitText)][0]
+			$g_aOverlayHistory[$j][1] = $g_aOverlayHistory[$j - UBound($aSplitText)][1]
+		Next
+		
+		; Add new message lines at the beginning (in correct order)
+		For $i = 0 To UBound($aSplitText) - 1
+			Local $sLine = $aSplitText[$i]
+			If $sLine = "" Then ContinueLoop ; Skip empty lines
+			
+			$g_aOverlayHistory[$i][0] = $sLine
+			$g_aOverlayHistory[$i][1] = $iColor
+		Next
+		
+		; Trim to max lines if we exceed the limit
+		If UBound($g_aOverlayHistory) > $iMaxLines Then
+			ReDim $g_aOverlayHistory[$iMaxLines][2]
+		EndIf
+	EndIf
+	
     ; Create labels for each line
     For $i = 0 To UBound($aSplitText) - 1
         Local $sLine = $aSplitText[$i]
         If $sLine = "" Then ContinueLoop ; Skip empty lines
 		
-		local $iRowHeight = Floor(_GUI_Option("overlay-fontsize") * 1.65)
         ; Background (black outline)
         Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
         GUICtrlSetColor($idLabelBg, 0x0A0A0A)
@@ -2217,7 +2318,8 @@ Func PrintString($sText, $iColor = $ePrintWhite)
         ReDim $g_aMessages[$iUBound + 1][4]
         $g_aMessages[$iUBound][0] = $idLabelBg
         $g_aMessages[$iUBound][1] = $idLabel
-        $g_aMessages[$iUBound][2] = TimerDiff($g_hScriptStartTime)
+        ; Set timestamp to 0 for history mode (never expires) or normal timestamp
+        $g_aMessages[$iUBound][2] = $g_bOverlayHistoryMode ? 0 : TimerDiff($g_hScriptStartTime)
         $g_aMessages[$iUBound][3] = $iRowHeight
 
         $g_iNextYPos += $iRowHeight
@@ -2333,10 +2435,17 @@ EndFunc
 
 Func OverlayMain()
     Static $iRecoveryCounter = 0
+    Static $iLastOverlayCheck = 0
+    Local $iCurrentTime = TimerInit()
     
-    ; Try to recover overlay if needed (check every 10 cycles)
+    ; Only check overlay every 1000ms instead of every frame
+    If TimerDiff($iLastOverlayCheck) < 1000 Then Return
+    $iLastOverlayCheck = $iCurrentTime
+    
+    ; Try to recover overlay if needed (check every 20 cycles instead of 10)
+    ; But don't recover if we're showing overlay history
     $iRecoveryCounter += 1
-    If $iRecoveryCounter >= 100 Then
+    If $iRecoveryCounter >= 20 And Not $g_bNotifierLogVisible Then
         RecoverOverlay()
         $iRecoveryCounter = 0
     EndIf
@@ -2366,12 +2475,20 @@ Func OverlayMain()
             $g_bCleanupRunning = False
             AdlibUnRegister("CleanUpExpiredText")
         Else
-            ; Update overlay position and visibility
-            UpdateOverlayPosition()
+            ; Update overlay position and visibility (less frequently)
+            Static $iLastPositionUpdate = 0
+            If TimerDiff($iLastPositionUpdate) > 1000 Then  ; Only update position every 1 second
+                UpdateOverlayPosition()
+                $iLastPositionUpdate = TimerInit()
+            EndIf
             
-            ; Ensure overlay stays on top
-            If WinGetState($g_hOverlayGUI) <> @SW_SHOWNOACTIVATE Then
-                WinSetState($g_hOverlayGUI, "", @SW_SHOWNOACTIVATE)
+            ; Ensure overlay stays on top (less frequently)
+            Static $iLastStateCheck = 0
+            If TimerDiff($iLastStateCheck) > 1000 Then  ; Only check state every 1 seconds
+                If WinGetState($g_hOverlayGUI) <> @SW_SHOWNOACTIVATE Then
+                    WinSetState($g_hOverlayGUI, "", @SW_SHOWNOACTIVATE)
+                EndIf
+                $iLastStateCheck = TimerInit()
             EndIf
         EndIf
     EndIf
