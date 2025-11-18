@@ -31,7 +31,7 @@ global const $g_sNotifyTextDefault = "#SOCKETABLES-------------------------" & @
 """Tome of Possession""" & @CRLF & _
 """Tenet""" & @CRLF & _
 """Riftstone"" red" & @CRLF & _
-"""Quest\|""" & @CRLF & _
+"""Quest Item\|""" & @CRLF & _
 "" & @CRLF & _
 "#MISC---------------------------------" & @CRLF & _
 """Wings""" & @CRLF & _

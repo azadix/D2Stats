@@ -2434,7 +2434,6 @@ Func CleanUpExpiredText()
 EndFunc
 
 Func OverlayMain()
-    Static $iRecoveryCounter = 0
     Static $iLastOverlayCheck = 0
     Local $iCurrentTime = TimerInit()
     
@@ -2442,22 +2441,14 @@ Func OverlayMain()
     If TimerDiff($iLastOverlayCheck) < 1000 Then Return
     $iLastOverlayCheck = $iCurrentTime
     
-    ; Try to recover overlay if needed (check every 20 cycles instead of 10)
-    ; But don't recover if we're showing overlay history
-    $iRecoveryCounter += 1
-    If $iRecoveryCounter >= 20 And Not $g_bNotifierLogVisible Then
-        RecoverOverlay()
-        $iRecoveryCounter = 0
-    EndIf
-
     ; Find the game window if we haven't already
     If $g_hOverlayGUI = 0 And IsGameWindowPresent() Then
         CreateOverlayWindow()
     ElseIf $g_hOverlayGUI <> 0 Then
-        ; Check if overlay window still exists
+        ; Check if overlay window still exists - only recover if window actually disappeared
         If Not WinExists($g_hOverlayGUI) Then
-            ; Mark overlay as invalid for next recovery cycle
-            $g_hOverlayGUI = 0
+            ; Overlay handle exists but window doesn't - recover it
+            RecoverOverlay()
             Return
         EndIf
         
