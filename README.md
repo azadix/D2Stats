@@ -6,7 +6,7 @@
 - Set up rule list that check drops and notify the user when matching one drops
 - Play sound notification when goblin appears
 
-[Forum post](https://forum.median-xl.com/viewtopic.php?p=599923#p599923)
+[Forum post](https://forum.median-xl.com/viewtopic.php?f=4&t=85654)
 
 ![D2Stats window screenshot](Assets/screenshot2.png "D2Stats window screenshot")
 ![D2Stats window screenshot](Assets/screenshot3.png "D2Stats window screenshot")
