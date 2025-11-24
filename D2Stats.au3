@@ -181,9 +181,8 @@ func Main()
 	while 1
 		Sleep(100)
 
-		OverlayMain()
-
 		if (TimerDiff($hTimerUpdateDelay) > 250) then
+			OverlayMain()
 			$hTimerUpdateDelay = TimerInit()
 
 			UpdateHandle()
@@ -2208,6 +2207,7 @@ Func CreateOverlayWindow()
     GUISetBkColor(0xABCDEF)
     _WinAPI_SetLayeredWindowAttributes($g_hOverlayGUI, 0xABCDEF, 255)
     GUISetState(@SW_SHOWNOACTIVATE, $g_hOverlayGUI)
+    WinSetOnTop($g_hOverlayGUI, "", 1)
 EndFunc
 
 Func RecoverOverlay()
@@ -2434,13 +2434,6 @@ Func CleanUpExpiredText()
 EndFunc
 
 Func OverlayMain()
-    Static $iLastOverlayCheck = 0
-    Local $iCurrentTime = TimerInit()
-    
-    ; Only check overlay every 1000ms instead of every frame
-    If TimerDiff($iLastOverlayCheck) < 1000 Then Return
-    $iLastOverlayCheck = $iCurrentTime
-    
     ; Find the game window if we haven't already
     If $g_hOverlayGUI = 0 And IsGameWindowPresent() Then
         CreateOverlayWindow()
@@ -2475,10 +2468,11 @@ Func OverlayMain()
             
             ; Ensure overlay stays on top (less frequently)
             Static $iLastStateCheck = 0
-            If TimerDiff($iLastStateCheck) > 1000 Then  ; Only check state every 1 seconds
+            If TimerDiff($iLastStateCheck) > 60000 Then  ; Only check state every 1 minute
                 If WinGetState($g_hOverlayGUI) <> @SW_SHOWNOACTIVATE Then
                     WinSetState($g_hOverlayGUI, "", @SW_SHOWNOACTIVATE)
                 EndIf
+                WinSetOnTop($g_hOverlayGUI, "", 1)
                 $iLastStateCheck = TimerInit()
             EndIf
         EndIf
