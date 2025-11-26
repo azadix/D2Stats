@@ -5,7 +5,7 @@ global const $g_sNotifyTextDefault = "#SOCKETABLES-------------------------" & @
 """Great Rune"" red" & @CRLF & _
 """Enchanted Rune"" red" & @CRLF & _
 "" & @CRLF & _
-"""(Amethyst|Topaz|Sapphire|Emerald|Ruby|Diamond|Skull|Onyx|Bloodstone|Turquoise|Amber|Rainbow Stone)""" & @CRLF & _
+"""(Amethyst|Topaz|Sapphire|Emerald|Ruby|Diamond|Skull|Onyx|Bloodstone|Turquoise|Amber|Rainbow Stone)$""" & @CRLF & _
 """^Perfect"" purple" & @CRLF & _
 "" & @CRLF & _
 "#CYCLE-------------------------------" & @CRLF & _
