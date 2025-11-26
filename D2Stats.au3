@@ -154,7 +154,7 @@ func DefineGlobals()
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem"], _
 		["copy-name", 0, "cb", "Only copy item name"], _
 		["readstats", 0x0000, "hk", "Read stats without tabbing out of the game", "HotKey_ReadStats"], _
-		["show-notifier-log", 0x004E, "hk", "Show notifier log", "HotKey_ShowNotifierLog"], _
+		["show-notifier-log", 0x00DC, "hk", "Show notifier log", "HotKey_ShowNotifierLog"], _
 		["notify-text", $g_sNotifyTextDefault, "tx"], _
 		["selectedNotifierRulesName", "Default", "tx"] _
 	]
