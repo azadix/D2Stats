@@ -480,7 +480,7 @@ global $g_d2StatNames[][5] = [ _
 		[475, "", True, "", True], _
 		[476, "", True, "", True], _
 		[477, "", True, "", True], _
-		[478, "", True, "", True], _
+		[478, "", True, "Socketed jewels", True], _
 		[479, "", True, "Maximum Skill level +#", True], _
 		[480, "", True, "+# to Vitality per Socketed Gem", True], _
 		[481, "", True, "+# to Runemaster Defense Bonus", True], _
