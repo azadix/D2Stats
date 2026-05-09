@@ -113,8 +113,10 @@ func DefineGlobals()
 	global $g_aiStatsCache[2][$g_iNumStats]
 	global $g_aiStatsCacheCopy[2][$g_iNumStats]
 
-	global $g_asDLL[] = ["D2Client.dll", "D2Common.dll", "D2Win.dll", "D2Lang.dll", "D2Sigma.dll"]
-	global $g_hD2Client, $g_hD2Common, $g_hD2Win, $g_hD2Lang, $g_hD2Sigma
+	; D2Sigma.dll was loaded historically but never referenced; current Median XL drops it from the
+	; install — LoadLibrary then returned 0 and the whole hook failed ("Couldn't retrieve dll addresses").
+	global $g_asDLL[] = ["D2Client.dll", "D2Common.dll", "D2Win.dll", "D2Lang.dll"]
+	global $g_hD2Client, $g_hD2Common, $g_hD2Win, $g_hD2Lang
 	global $g_ahD2Handle
 
 	global $g_iD2pid, $g_iUpdateFailCounter
@@ -174,9 +176,9 @@ func Main()
 
 			if (IsIngame()) then
 				; why inject every frame if we can just inject once?
-				if (not $bIsIngame) then 
+				if (not $bIsIngame) then
 					$g_bNotifyCache = True
-					InjectFunctions()
+					if (not InjectFunctions()) then _Log("Main", "InjectFunctions failed after entering game; notifier/stats may be broken until offsets match your client.", 0, 0)
 				endif
 
 				if (_GUI_Option("nopickup") and not $bIsIngame) then _MemoryWrite($g_hD2Client + 0x11C2F0, $g_ahD2Handle, 1, "byte")
@@ -2438,14 +2440,16 @@ func UpdateDllHandles()
 	for $i = 0 to $iDLLs - 1
 		_MemoryWrite($pAllocAddress, $g_ahD2Handle, $g_asDLL[$i], StringFormat("char[%s]", StringLen($g_asDLL[$i]) + 1))
 		$hDLLHandle[$i] = RemoteThread($pLoadLibraryA, $pAllocAddress)
-		if ($hDLLHandle[$i] == 0) then $bFailed = True
+		if ($hDLLHandle[$i] == 0) then
+			$bFailed = True
+			_Log("UpdateDllHandles", "LoadLibrary in game process failed for: " & $g_asDLL[$i], 0, 0)
+		endif
 	next
 
 	$g_hD2Client = $hDLLHandle[0]
 	$g_hD2Common = $hDLLHandle[1]
 	$g_hD2Win = $hDLLHandle[2]
 	$g_hD2Lang = $hDLLHandle[3]
-	$g_hD2Sigma = $hDLLHandle[4]
 
 	local $pD2Inject = $g_hD2Client + 0xCDE00
 	$g_pD2InjectPrint = $pD2Inject + 0x01 ; memory alignment
