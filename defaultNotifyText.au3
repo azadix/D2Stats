@@ -44,7 +44,6 @@ global const $g_sNotifyTextDefault = "#SOCKETABLES-------------------------" & @
 "" & @CRLF & _
 "#EQUIPMENT----------------------------" & @CRLF & _
 "sacred eth superior" & @CRLF & _
-"sacred eth superior rare" & @CRLF & _
 "1 2 3 4 unique" & @CRLF & _
 "sacred unique" & @CRLF & _
 "set" & @CRLF & _

@@ -299,7 +299,7 @@ global $g_d2StatNames[][5] = [ _
 		[294, "", True, "", True], _
 		[295, "", True, "+# Mana on melee attack", True], _
 		[296, "", True, "", True], _
-		[297, "", True, "Mana drain -#% (from Werewolf morph)", True], _
+		[297, "", True, "Mana drain -#%", True], _
 		[298, "", True, "", True], _
 		[299, "", True, "", True], _
 		[300, "", True, "", True], _
