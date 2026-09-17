@@ -166,14 +166,14 @@ global $g_d2StatNames[][5] = [ _
 		[161, "", True, "", True], _
 		[162, "", True, "", True], _
 		[163, "", True, "", True], _
-		[164, "", True, "+#% Uniterruptable Attack", True], _
+		[164, "", True, "+#% Chance of Uninterruptable Attack", True], _
 		[165, "", True, "", True], _
 		[166, "", True, "", True], _
 		[167, "", True, "", True], _
 		[168, "", True, "", True], _
 		[169, "", True, "", True], _
 		[170, "", True, "", True], _
-		[171, "", True, "+#% Total Character Defense", True], _
+		[171, "", True, "+#% Bonus to Defense", True], _
 		[172, "", True, "", True], _
 		[173, "", True, "", True], _
 		[174, "", True, "", True], _
@@ -194,7 +194,7 @@ global $g_d2StatNames[][5] = [ _
 		[189, "", True, "", True], _
 		[190, "", True, "", True], _
 		[191, "", True, "", True], _
-		[192, "", True, "", True], _
+		[192, "", True, "#% Chance to cast [SKILL] on kill", True], _
 		[193, "", True, "", True], _
 		[194, "", True, "Equipped items socket amount", True], _
 		[195, "", True, "#% Chance to cast [SKILL] on melee attack", True], _
@@ -207,7 +207,7 @@ global $g_d2StatNames[][5] = [ _
 		[202, "", True, "", True], _
 		[203, "", True, "", True], _
 		[204, "", True, "", True], _
-		[205, "", True, "", True], _
+		[205, "", True, "+#% Maximum Avoid Chance", True], _
 		[206, "", True, "", True], _
 		[207, "", True, "", True], _
 		[208, "", True, "+# Life on striking", True], _
@@ -230,8 +230,8 @@ global $g_d2StatNames[][5] = [ _
 		[225, "", True, "", True], _
 		[226, "", True, "", True], _
 		[227, "", True, "", True], _
-		[228, "", True, "", True], _
-		[229, "", True, "", True], _
+		[228, "", True, "+/-#% Mana Cost of Skills", True], _
+		[229, "", True, "Summon physical resistance +#%", True], _
 		[230, "", True, "", True], _
 		[231, "", True, "", True], _
 		[232, "", True, "", True], _
@@ -263,7 +263,7 @@ global $g_d2StatNames[][5] = [ _
 		[258, "", True, "", True], _
 		[259, "", True, "Charges: #", True], _
 		[260, "", True, "", True], _
-		[261, "", True, "", True], _
+		[261, "", True, "+# Extra Totems", True], _
 		[262, "", True, "", True], _
 		[263, "", True, "", True], _
 		[264, "", True, "", True], _
@@ -281,7 +281,7 @@ global $g_d2StatNames[][5] = [ _
 		[276, "", True, "Stun Attack amount", True], _
 		[277, "", True, "Area Effect Attack amount", True], _
 		[278, "", True, "Strength Factor +#", True], _
-		[279, "", True, "", True], _
+		[279, "", True, "Lion Stance damage bonus", True], _
 		[280, "", True, "", True], _
 		[281, "", True, "", True], _
 		[282, "", True, "", True], _
@@ -311,7 +311,7 @@ global $g_d2StatNames[][5] = [ _
 		[306, "", True, "", True], _
 		[307, "", True, "", True], _
 		[308, "", True, "", True], _
-		[309, "", True, "", True], _
+		[309, "", True, "Cooldown Reduced", True], _
 		[310, "", True, "", True], _
 		[311, "", True, "", True], _
 		[312, "", True, "", True], _
@@ -374,7 +374,7 @@ global $g_d2StatNames[][5] = [ _
 		[369, "", True, "", True], _
 		[370, "", True, "", True], _
 		[371, "", True, "Amazing Grace amount", True], _
-		[372, "", True, "Equipped runeword amount", True], _
+		[372, "", True, "Equipped runeword amount/Cannot be Unsocketed amount", True], _
 		[373, "", True, "", True], _
 		[374, "", True, "", True], _
 		[375, "", True, "", True], _
@@ -411,7 +411,7 @@ global $g_d2StatNames[][5] = [ _
 		[406, "", True, "", True], _
 		[407, "", True, "", True], _
 		[408, "", True, "", True], _
-		[409, "", True, "", True], _
+		[409, "", True, "Skill Duration", True], _
 		[410, "", True, "# Prefixes", True], _
 		[411, "", True, "# Suffixes", True], _
 		[412, "", True, "", True], _
@@ -446,11 +446,11 @@ global $g_d2StatNames[][5] = [ _
 		[441, "", True, "+# to Maximum Necromancer minions", True], _
 		[442, "", True, "", True], _
 		[443, "", True, "Already upgraded amount", False], _
-		[444, "", True, "Summoned minion life +#%", True], _
+		[444, "", True, "Summon life +#%", True], _
 		[445, "", True, "+# to Maximum Barbarian minions", True], _
 		[446, "", True, "+#% Damage from Protector Spirit Bloodlust", True], _
 		[447, "", True, "Restored amount", False], _
-		[448, "", True, "#% increased Healing from Potions", True], _
+		[448, "", True, "#% Potion Effectiveness", True], _
 		[449, "", True, "", True], _
 		[450, "", True, "Trophy amount", True], _
 		[451, "", True, "", True], _
@@ -472,7 +472,7 @@ global $g_d2StatNames[][5] = [ _
 		[467, "", True, "", True], _
 		[468, "", True, "+#% Bonus damage to Vessel of Retribution", True], _
 		[469, "", True, "+# to Vessels Extra Targets", True], _
-		[470, "", True, "Summoned minion damage +#%", True], _
+		[470, "", True, "Summon damage +#%", True], _
 		[471, "", True, "", True], _
 		[472, "", True, "", True], _
 		[473, "", True, "Ennead skill unlock (0/1)", True], _
@@ -489,7 +489,7 @@ global $g_d2StatNames[][5] = [ _
 		[484, "", True, "Innate Elemental damage +#%", True], _
 		[485, "", True, "+# Spell Focus", True], _
 		[486, "", True, "", True], _
-		[487, "", True, "Summoned minion resistances +#%", True], _
+		[487, "", True, "Summon elemental resistances +#%", True], _
 		[488, "", True, "+#% Spell Focus (from items/runes)", True], _
 		[489, "", True, "Target takes additional damage +#", True], _
 		[490, "", True, "", True], _
@@ -509,7 +509,7 @@ global $g_d2StatNames[][5] = [ _
 		[504, "", True, "", True], _
 		[505, "", True, "+# Life Regenerated per Second (Based on Character Level) [(value / 32) * [LEVEL]]", True], _
 		[506, "", True, "", True], _
-		[507, "", True, "", True], _
+		[507, "", True, "# Deimoss pillars enabled/Duncraig totem aura ID", True], _
 		[508, "", True, "Runes contributing to Gematria", True], _
 		[509, "", True, "", True], _
 		[510, "", True, "#% Chance to cast [SKILL] on block", True], _
