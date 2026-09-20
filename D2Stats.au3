@@ -132,6 +132,8 @@ func DefineGlobals()
 	global $g_aNotifierLogLines[0]
 	global $g_aOverlayHistory[0][2]  ; [text, color, timestamp] - stores last overlay messages (max visible lines)
 	global $g_bOverlayHistoryMode = False  ; Flag to indicate we're in history display mode
+	global $g_bOverlayHistoryGroup = False  ; Group consecutive PrintString calls (one item notification)
+	global $g_iOverlayHistoryGroupLen = 0  ; Lines already stored in the current group
 
 	global const $g_iGUIOptionsGeneral = 14
 	global const $g_iGUIOptionsHotkey = 4
@@ -1424,6 +1426,10 @@ func DisplayNotification(ByRef $asNotificationsPool)
         NotifierPlaySound($iFlagsSound)
     endif
 
+    ; Group this item's PrintString calls so history keeps live overlay order
+    $g_bOverlayHistoryGroup = True
+    $g_iOverlayHistoryGroupLen = 0
+
     ; Display name and type
     ShowIfAvailable($asName)
     ShowIfAvailable($asType)
@@ -1435,6 +1441,9 @@ func DisplayNotification(ByRef $asNotificationsPool)
     if (_GUI_Option("debug-notifier")) then
         PrintString("rule - " & $sMatchingLine, $ePrintRed)
     endif
+
+    $g_bOverlayHistoryGroup = False
+    $g_iOverlayHistoryGroupLen = 0
 endfunc
 
 ;Show a 2-element array if it exists
@@ -2283,28 +2292,46 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 		; Calculate max lines based on overlay height
 		Local $iMaxLines = Floor($aOverlayPos[3] / $iRowHeight)
 		Local $iHistorySize = UBound($g_aOverlayHistory)
-		
-		; Add all lines of this message as a group at the beginning (newest first)
-		ReDim $g_aOverlayHistory[$iHistorySize + UBound($aSplitText)][2]
-		
-		; Shift existing messages down to make room for new messages at the beginning
-		For $j = $iHistorySize + UBound($aSplitText) - 1 To UBound($aSplitText) Step -1
-			$g_aOverlayHistory[$j][0] = $g_aOverlayHistory[$j - UBound($aSplitText)][0]
-			$g_aOverlayHistory[$j][1] = $g_aOverlayHistory[$j - UBound($aSplitText)][1]
-		Next
-		
-		; Add new message lines at the beginning (in correct order)
+
+		; Count only lines that will actually be stored
+		Local $iNewLines = 0
 		For $i = 0 To UBound($aSplitText) - 1
-			Local $sLine = $aSplitText[$i]
-			If $sLine = "" Then ContinueLoop ; Skip empty lines
-			
-			$g_aOverlayHistory[$i][0] = $sLine
-			$g_aOverlayHistory[$i][1] = $iColor
+			If $aSplitText[$i] <> "" Then $iNewLines += 1
 		Next
-		
+
+		If $iNewLines > 0 Then
+			; Insert after lines already in this notification group (or at 0 for a new message)
+			Local $iInsert = 0
+			If $g_bOverlayHistoryGroup Then $iInsert = $g_iOverlayHistoryGroupLen
+
+			ReDim $g_aOverlayHistory[$iHistorySize + $iNewLines][2]
+
+			; Shift existing messages down from the insert point
+			For $j = $iHistorySize + $iNewLines - 1 To $iInsert + $iNewLines Step -1
+				$g_aOverlayHistory[$j][0] = $g_aOverlayHistory[$j - $iNewLines][0]
+				$g_aOverlayHistory[$j][1] = $g_aOverlayHistory[$j - $iNewLines][1]
+			Next
+
+			; Add new message lines in original order
+			Local $iStored = 0
+			For $i = 0 To UBound($aSplitText) - 1
+				Local $sLine = $aSplitText[$i]
+				If $sLine = "" Then ContinueLoop ; Skip empty lines
+
+				$g_aOverlayHistory[$iInsert + $iStored][0] = $sLine
+				$g_aOverlayHistory[$iInsert + $iStored][1] = $iColor
+				$iStored += 1
+			Next
+
+			If $g_bOverlayHistoryGroup Then $g_iOverlayHistoryGroupLen += $iNewLines
+		EndIf
+
 		; Trim to max lines if we exceed the limit
 		If UBound($g_aOverlayHistory) > $iMaxLines Then
 			ReDim $g_aOverlayHistory[$iMaxLines][2]
+			If $g_bOverlayHistoryGroup And $g_iOverlayHistoryGroupLen > $iMaxLines Then
+				$g_iOverlayHistoryGroupLen = $iMaxLines
+			EndIf
 		EndIf
 	EndIf
 	
