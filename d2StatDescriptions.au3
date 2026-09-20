@@ -171,7 +171,7 @@ global $g_d2StatNames[][5] = [ _
 		[166, "", True, "", True], _
 		[167, "", True, "", True], _
 		[168, "", True, "", True], _
-		[169, "", True, "", True], _
+		[169, "", True, "# Fury charges???", True], _
 		[170, "", True, "", True], _
 		[171, "", True, "+#% Bonus to Defense", True], _
 		[172, "", True, "", True], _
@@ -193,7 +193,7 @@ global $g_d2StatNames[][5] = [ _
 		[188, "", True, "", True], _
 		[189, "", True, "", True], _
 		[190, "", True, "", True], _
-		[191, "", True, "", True], _
+		[191, "", True, "# Fury charges???", True], _
 		[192, "", True, "#% Chance to cast [SKILL] on kill", True], _
 		[193, "", True, "", True], _
 		[194, "", True, "Equipped items socket amount", True], _
@@ -302,7 +302,7 @@ global $g_d2StatNames[][5] = [ _
 		[297, "", True, "Mana drain -#%", True], _
 		[298, "", True, "", True], _
 		[299, "", True, "", True], _
-		[300, "", True, "", True], _
+		[300, "", True, "Additional Dexterity Damage bonus", True], _
 		[301, "", True, "", True], _
 		[302, "", True, "", True], _
 		[303, "", True, "", True], _
@@ -444,7 +444,7 @@ global $g_d2StatNames[][5] = [ _
 		[439, "", True, "+# Life when struck by an enemy", True], _
 		[440, "", True, "+# Mana when struck by an enemy", True], _
 		[441, "", True, "+# to Maximum Necromancer minions", True], _
-		[442, "", True, "", True], _
+		[442, "", True, "Additional Strength Damage bonus", True], _
 		[443, "", True, "Already upgraded amount", False], _
 		[444, "", True, "Summon life +#%", True], _
 		[445, "", True, "+# to Maximum Barbarian minions", True], _
@@ -473,7 +473,7 @@ global $g_d2StatNames[][5] = [ _
 		[468, "", True, "+#% Bonus damage to Vessel of Retribution", True], _
 		[469, "", True, "+# to Vessels Extra Targets", True], _
 		[470, "", True, "Summon damage +#%", True], _
-		[471, "", True, "", True], _
+		[471, "", True, "#% Trap Damage (from Tinker's Gambit)", True], _
 		[472, "", True, "", True], _
 		[473, "", True, "Ennead skill unlock (0/1)", True], _
 		[474, "", True, "Black Road unlock (0/1)", True], _
