@@ -2,7 +2,7 @@
 
 ## Features
 - Read character/mercenary stats
-- Check difference in stats between 2 states (Click 'Read' and after modifying stats click 'Diff' which display table of changed stats)
+- Check difference in stats between 2 states (Click 'Read' to snapshot stats. After modifying stats, click 'Diff' to compare without changing the snapshot, or 'Diff and replace' to compare and then overwrite the snapshot)
 - Set up rule list that check drops and notify the user when matching one drops
 - Play sound notification when goblin appears
 

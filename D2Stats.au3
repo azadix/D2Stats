@@ -450,7 +450,15 @@ func HotKey_ShowNotifierLog()
 	endif
 endfunc
 
-func CompareStats()
+func OnClick_ShowDiff()
+	CompareStats(False)
+endfunc
+
+func OnClick_ShowDiffAndReplace()
+	CompareStats(True)
+endfunc
+
+func CompareStats($bReplaceSnapshot = True)
     UpdateStatValues()
     UpdateGUI()
     
@@ -483,7 +491,9 @@ func CompareStats()
         PrintString("No stat differences found.", $ePrintBlue)
     endif
     
-    $g_aiStatsCacheCopy = $g_aiStatsCache
+    if ($bReplaceSnapshot) then
+        $g_aiStatsCacheCopy = $g_aiStatsCache
+    endif
 endfunc
 
 func ShowStatDiffDialog($aStats)
@@ -1824,6 +1834,7 @@ func OnClick_Tab()
 	local $iState = GUICtrlRead($g_idTab) < 3 ? $GUI_SHOW : $GUI_HIDE
 	GUICtrlSetState($g_idReadStats, $iState)
 	GUICtrlSetState($g_idShowDiff, $iState)
+	GUICtrlSetState($g_idShowDiffOnly, $iState)
 	GUICtrlSetState($g_idReadMercenary, $iState)
 endfunc
 
@@ -2498,10 +2509,13 @@ func CreateGUI()
 	global $g_idReadStats = GUICtrlCreateButton("Read", $g_iGroupXStart, $iBottomButtonCoords, 70, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_ReadStats")
 
-	global $g_idShowDiff = GUICtrlCreateButton("Diff", $g_iGroupXStart + 78, $iBottomButtonCoords, 70, 25)
-	GUICtrlSetOnEvent(-1, "CompareStats")
+	global $g_idShowDiff = GUICtrlCreateButton("Diff and replace", $g_iGroupXStart + 78, $iBottomButtonCoords, 120, 25)
+	GUICtrlSetOnEvent(-1, "OnClick_ShowDiffAndReplace")
 
-	global $g_idReadMercenary = GUICtrlCreateCheckbox("Mercenary", $g_iGroupXStart + 156, $iBottomButtonCoords + 1)
+	global $g_idShowDiffOnly = GUICtrlCreateButton("Diff", $g_iGroupXStart + 206, $iBottomButtonCoords, 70, 25)
+	GUICtrlSetOnEvent(-1, "OnClick_ShowDiff")
+
+	global $g_idReadMercenary = GUICtrlCreateCheckbox("Mercenary", $g_iGroupXStart + 284, $iBottomButtonCoords + 1)
 
 	global $g_idTab = GUICtrlCreateTab(0, 0, $g_iGUIWidth, 0, $TCS_FOCUSNEVER)
 	GUICtrlSetResizing (-1, $GUI_DOCKMENUBAR)
