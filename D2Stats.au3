@@ -3010,7 +3010,26 @@ func GetItemStats($pUnit)
 	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[2048]")
 	RemoteThread($g_pD2Client_GetItemStat, $pUnit)
 	if (@error) then return _Log("GetItemStats", "Failed to create remote thread.")
-	return GetOutputString(2048)
+	local $sStats = GetOutputString(2048)
+
+	; Omitted stats must be prepended: HighlightStats reverses formatter output
+	; to match the in-game tooltip, so a trailing line would display first.
+	; Median XL custom stat 427 uses descFunc=38, which the D2Client formatter omits.
+	local $iActivationFrequency = GetUnitStat($pUnit, 427)
+	if ($iActivationFrequency <> 0 and StringInStr($sStats, "Activation Frequency") == 0) then
+		local $sActivationFrequency = "Activation Frequency +" & $iActivationFrequency & "%"
+		$sStats = ($sStats <> "") ? ($sActivationFrequency & @CRLF & $sStats) : $sActivationFrequency
+	endif
+
+	; Stat 74 is stored 10x the tooltip value. The D2Client formatter often omits
+	; Median XL's "Life Regenerated per Second" line the same way as descFunc=38.
+	local $iLifeRegen = Floor(GetUnitStat($pUnit, 74) / 10)
+	if ($iLifeRegen <> 0 and StringInStr($sStats, "Life Regenerat") == 0 and StringInStr($sStats, "Life regeneration") == 0 and StringInStr($sStats, "Replenish Life") == 0) then
+		local $sLifeRegen = "+" & $iLifeRegen & " Life Regenerated per Second"
+		$sStats = ($sStats <> "") ? ($sLifeRegen & @CRLF & $sStats) : $sLifeRegen
+	endif
+	
+	return $sStats
 endfunc
 
 func GetUnitStat($pUnit, $iStat)
