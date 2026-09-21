@@ -71,7 +71,7 @@ global $g_d2StatNames[][5] = [ _
 		[66, "", True, "Stun Attack", True], _
 		[67, "", True, "Skill Faster Run Walk +#%", True], _
 		[68, "", True, "Skill Attack Speed +#%", True], _
-		[69, "", True, "", True], _
+		[69, "", True, "Skill Other Animation Rate +#%", True], _
 		[70, "", True, "Quiver/Throwing weapon quantity amount", True], _
 		[71, "", True, "Equipped items value", True], _
 		[72, "", True, "Equipped items total Durability", True], _
@@ -498,7 +498,7 @@ global $g_d2StatNames[][5] = [ _
 		[493, "", True, "Slows Ranged Attacker +#%", True], _
 		[494, "", True, "", True], _
 		[495, "", True, "", True], _
-		[496, "", True, "", True], _
+		[496, "", True, "'Cube with Oil of Craft to Reveal' amount", True], _
 		[497, "", True, "Corrupted items amount", True], _
 		[498, "", True, "", True], _
 		[499, "", True, "", True], _
