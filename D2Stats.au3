@@ -3008,13 +3008,30 @@ func GetItemName($pUnit)
 	return StringSplit(GetOutputString(256), @LF)
 endfunc
 
+; D2Client GetItemDesc prints dummy unique aura/oskill/proc skills whose name
+; string is missing as "FLYING POLAR BUFFALO ERROR". The in-game unique tooltip
+; hides those lines; strip them so overlay stats match.
+func StripMissingSkillDescLines($sStats)
+	if ($sStats == "") then return ""
+
+	local $asLines = StringSplit($sStats, @LF)
+	local $sOut = ""
+	local $i
+	for $i = 1 to $asLines[0]
+		if (StringInStr($asLines[$i], "FLYING POLAR BUFFALO ERROR")) then continueloop
+		if ($sOut <> "") then $sOut &= @LF
+		$sOut &= $asLines[$i]
+	next
+	return $sOut
+endfunc
+
 func GetItemStats($pUnit)
 	if (not IsIngame()) then return ""
 	;~ clean before use
 	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[" & $g_iD2InjectStringBytes & "]")
 	RemoteThread($g_pD2Client_GetItemStat, $pUnit)
 	if (@error) then return _Log("GetItemStats", "Failed to create remote thread.")
-	local $sStats = GetOutputString($g_iD2InjectStringWChars)
+	local $sStats = StripMissingSkillDescLines(GetOutputString($g_iD2InjectStringWChars))
 
 	; Omitted stats must be prepended: HighlightStats reverses formatter output
 	; to match the in-game tooltip, so a trailing line would display first.
