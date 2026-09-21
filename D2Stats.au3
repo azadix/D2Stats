@@ -124,6 +124,10 @@ func DefineGlobals()
 	global $g_iD2pid, $g_iUpdateFailCounter
 
 	global $g_pD2sgpt, $g_pD2InjectPrint, $g_pD2InjectString, $g_pD2InjectParams, $g_pD2InjectGetString, $g_pD2Client_GetItemName, $g_pD2Client_GetItemStat, $g_pD2Common_GetUnitStat
+	; Game tooltip formatter strcpy's into this with no length. 0x1000 (2048 wchar)
+	; overflowed on long MXL items; keep alloc/zero/read sizes in sync.
+	global const $g_iD2InjectStringBytes = 0x8000
+	global const $g_iD2InjectStringWChars = $g_iD2InjectStringBytes / 2
 
 	global $g_bHotkeysEnabled = False
 	global $g_hTimerCopyName = 0
@@ -3007,10 +3011,10 @@ endfunc
 func GetItemStats($pUnit)
 	if (not IsIngame()) then return ""
 	;~ clean before use
-	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[2048]")
+	_MemoryWrite($g_pD2InjectString, $g_ahD2Handle, 0, "byte[" & $g_iD2InjectStringBytes & "]")
 	RemoteThread($g_pD2Client_GetItemStat, $pUnit)
 	if (@error) then return _Log("GetItemStats", "Failed to create remote thread.")
-	local $sStats = GetOutputString(2048)
+	local $sStats = GetOutputString($g_iD2InjectStringWChars)
 
 	; Omitted stats must be prepended: HighlightStats reverses formatter output
 	; to match the in-game tooltip, so a trailing line would display first.
@@ -3187,8 +3191,8 @@ func UpdateDllHandles()
 	$g_pD2Client_GetItemName = $pD2Inject + 0x21
 	$g_pD2Client_GetItemStat = $pD2Inject + 0x3E
 	$g_pD2Common_GetUnitStat = $pD2Inject + 0x54
-	;~ make more room for full item description
-	$g_pD2InjectString = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x1000, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	; Output buffer for injected GetItemStats (game wcscpy, no dest length)
+	$g_pD2InjectString = _MemVirtualAllocEx($g_ahD2Handle[1], 0, $g_iD2InjectStringBytes, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
 	;~ make room for params array
 	$g_pD2InjectParams = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
 
