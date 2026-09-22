@@ -1905,11 +1905,10 @@ endfunc
 func OnClick_Tab()
 	local $iTab = GUICtrlRead($g_idTab)
 	local $iReadState = ($iTab < 3 or $iTab == $g_iTabCompare) ? $GUI_SHOW : $GUI_HIDE
-	local $iCompareState = ($iTab == $g_iTabCompare) ? $GUI_SHOW : $GUI_HIDE
 	GUICtrlSetState($g_idReadStats, $iReadState)
 	GUICtrlSetState($g_idReadMercenary, $iReadState)
-	GUICtrlSetState($g_idShowDiff, $iCompareState)
-	GUICtrlSetState($g_idShowDiffOnly, $iCompareState)
+	GUICtrlSetState($g_idShowDiff, $iReadState)
+	GUICtrlSetState($g_idShowDiffOnly, $iReadState)
 endfunc
 
 func GetCompareStatName($iStat)
@@ -2951,6 +2950,7 @@ func CreateGUI()
 	GUICtrlCreateLabel("", 0, 44, $g_iGUIWidth, 2, $SS_ETCHEDHORZ)
 	GUICtrlSetResizing(-1, BitOR($GUI_DOCKTOP, $GUI_DOCKLEFT, $GUI_DOCKRIGHT, $GUI_DOCKHEIGHT))
 	UpdateGUI()
+	OnClick_Tab()
 	GUIRegisterMsg($WM_COMMAND, "WM_COMMAND")
 	GUIRegisterMsg($WM_NOTIFY, "WM_NOTIFY")
 	GUIRegisterMsg($WM_GETMINMAXINFO, "WM_GETMINMAXINFO")
