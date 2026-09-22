@@ -1934,6 +1934,7 @@ func RefreshCompareList()
 	local $sName, $iIndex
 	local $hList = GetCompareListHandle()
 
+	AdlibUnRegister("EnableCompareSave")
 	$g_bCompareSaveSuspend = True
 	_GUICtrlListView_BeginUpdate($hList)
 	; Native DeleteAllItems treats ItemParam as a control ID and can delete tab items.
@@ -1950,6 +1951,11 @@ func RefreshCompareList()
 	next
 
 	_GUICtrlListView_EndUpdate($hList)
+	AdlibRegister("EnableCompareSave", 100)
+endfunc
+
+func EnableCompareSave()
+	AdlibUnRegister("EnableCompareSave")
 	$g_bCompareSaveSuspend = False
 endfunc
 
@@ -3176,6 +3182,7 @@ Func WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
 	Local $iNewState = DllStructGetData($tInfo, "NewState")
 	Local $iOldState = DllStructGetData($tInfo, "OldState")
 	If BitAND($iNewState, $LVIS_STATEIMAGEMASK) = BitAND($iOldState, $LVIS_STATEIMAGEMASK) Then Return $GUI_RUNDEFMSG
+	If Not (_IsPressed("01") Or _IsPressed("20")) Then Return $GUI_RUNDEFMSG
 
 	Local $iStatId = GetCompareListStatId(DllStructGetData($tInfo, "Item"))
 	If $iStatId < 0 Or $iStatId >= $g_iNumStats Then Return $GUI_RUNDEFMSG
