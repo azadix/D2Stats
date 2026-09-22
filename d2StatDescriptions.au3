@@ -153,7 +153,7 @@ global $g_d2StatNames[][5] = [ _
 		[148, "", True, "Cold Absorb #%", True], _
 		[149, "", True, "+# Cold Absorb", True], _
 		[150, "", True, "Slows Target by #%", True], _
-		[151, "", True, "Random movement speed bonus (0/1)", True], _
+		[151, "", True, "", True], _
 		[152, "", True, "Indestructible (0/1)", True], _
 		[153, "", True, "Cannot Be Frozen", True], _
 		[154, "", True, "#% Slower Stamina Drain", True], _
