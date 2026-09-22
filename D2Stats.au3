@@ -116,6 +116,15 @@ func DefineGlobals()
 	global const $g_iNumStats = 1024
 	global $g_aiStatsCache[2][$g_iNumStats]
 	global $g_aiStatsCacheCopy[2][$g_iNumStats]
+	global $g_abCompareEnabled[$g_iNumStats]
+	global $g_idCompareList = 0, $g_idCompareFilter = 0
+	global $g_iTabCompare = 4
+	global $g_bCompareSaveSuspend = False
+	global $g_bCompareDirty = False
+
+	for $i = 0 to $g_iNumStats - 1
+		$g_abCompareEnabled[$i] = True
+	next
 
 	global $g_asDLL[] = ["D2Client.dll", "D2Common.dll", "D2Win.dll", "D2Lang.dll", "D2Sigma.dll"]
 	global $g_hD2Client, $g_hD2Common, $g_hD2Win, $g_hD2Lang, $g_hD2Sigma
@@ -226,6 +235,8 @@ func _Exit()
 		local $iButton = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "D2Stats", "There are unsaved changes in the notifier rules. Save?", 0, $g_hGUI)
 		if ($iButton == $IDYES) then OnClick_NotifySave()
 	endif
+
+	if ($g_bCompareDirty) then SaveGUICompare()
 
 	OnAutoItExitUnRegister("_Exit")
 	_GUICtrlHKI_Release()
@@ -471,18 +482,23 @@ func CompareStats($bReplaceSnapshot = True)
     ;Compare stats
     local $statDiffCount = 0
     local $g_statDiff[0][5]
-    for $i = 0 To $g_iNumStats - 1    
-        if (($g_aiStatsCacheCopy[0][$i] <> $g_aiStatsCache[0][$i]) AND $g_d2StatNames[$i][2] == True) then
+    local $sName
+    for $i = 0 To $g_iNumStats - 1
+        if (not $g_abCompareEnabled[$i]) then continueloop
+
+        if ($g_aiStatsCacheCopy[0][$i] <> $g_aiStatsCache[0][$i]) then
+            $sName = $g_d2StatNames[$i][1]
             _ArrayAdd($g_statDiff, $i & "|" & _
-                                $g_d2StatNames[$i][1] & "|" & _
+                                $sName & "|" & _
                                 $g_aiStatsCacheCopy[0][$i] & "|" & _
                                 $g_aiStatsCache[0][$i] & "|" & _
                                 $g_aiStatsCache[0][$i]-$g_aiStatsCacheCopy[0][$i])
             $statDiffCount += 1
         endif
-        if (($g_aiStatsCacheCopy[1][$i] <> $g_aiStatsCache[1][$i]) AND $g_d2StatNames[$i][4] == True) then
+        if ($g_aiStatsCacheCopy[1][$i] <> $g_aiStatsCache[1][$i]) then
+            $sName = $g_d2StatNames[$i][3]
             _ArrayAdd($g_statDiff, $i & "|" & _
-                                $g_d2StatNames[$i][3] & "|" & _
+                                $sName & "|" & _
                                 $g_aiStatsCacheCopy[1][$i] & "|" & _
                                 $g_aiStatsCache[1][$i] & "|" & _
                                 $g_aiStatsCache[1][$i]-$g_aiStatsCacheCopy[1][$i])
@@ -1647,7 +1663,7 @@ func _GUI_StringWidth($sText)
 endfunc
 
 func _GUI_LineY($iLine)
-	return 28 + 15*$iLine
+	return 48 + 15*$iLine
 endfunc
 
 func _GUI_GroupX($iX = default)
@@ -1887,11 +1903,80 @@ func OnClick_ReadStats()
 endfunc
 
 func OnClick_Tab()
-	local $iState = GUICtrlRead($g_idTab) < 3 ? $GUI_SHOW : $GUI_HIDE
-	GUICtrlSetState($g_idReadStats, $iState)
-	GUICtrlSetState($g_idShowDiff, $iState)
-	GUICtrlSetState($g_idShowDiffOnly, $iState)
-	GUICtrlSetState($g_idReadMercenary, $iState)
+	local $iTab = GUICtrlRead($g_idTab)
+	local $iReadState = ($iTab < 3 or $iTab == $g_iTabCompare) ? $GUI_SHOW : $GUI_HIDE
+	local $iCompareState = ($iTab == $g_iTabCompare) ? $GUI_SHOW : $GUI_HIDE
+	GUICtrlSetState($g_idReadStats, $iReadState)
+	GUICtrlSetState($g_idReadMercenary, $iReadState)
+	GUICtrlSetState($g_idShowDiff, $iCompareState)
+	GUICtrlSetState($g_idShowDiffOnly, $iCompareState)
+endfunc
+
+func GetCompareStatName($iStat)
+	local $sName1 = $g_d2StatNames[$iStat][1]
+	local $sName2 = $g_d2StatNames[$iStat][3]
+	if ($sName1 <> "" and $sName2 <> "") then return $sName1 & " / " & $sName2
+	if ($sName2 <> "") then return $sName2
+	if ($sName1 <> "") then return $sName1
+	return ""
+endfunc
+
+func GetCompareListHandle()
+	return GUICtrlGetHandle($g_idCompareList)
+endfunc
+
+func GetCompareListStatId($iIndex)
+	return Int(_GUICtrlListView_GetItemText($g_idCompareList, $iIndex, 0))
+endfunc
+
+func RefreshCompareList()
+	local $sFilter = GUICtrlRead($g_idCompareFilter)
+	local $sName, $iIndex
+	local $hList = GetCompareListHandle()
+
+	$g_bCompareSaveSuspend = True
+	_GUICtrlListView_BeginUpdate($hList)
+	; Native DeleteAllItems treats ItemParam as a control ID and can delete tab items.
+	_SendMessage($hList, $LVM_DELETEALLITEMS)
+
+	for $i = 0 to $g_iNumStats - 1
+		$sName = GetCompareStatName($i)
+		if ($sFilter <> "") then
+			if (StringInStr($sName, $sFilter, $STR_NOCASESENSEBASIC) == 0 and StringInStr(String($i), $sFilter) == 0) then continueloop
+		endif
+		$iIndex = _GUICtrlListView_AddItem($hList, $i)
+		_GUICtrlListView_AddSubItem($hList, $iIndex, $sName, 1)
+		_GUICtrlListView_SetItemChecked($hList, $iIndex, $g_abCompareEnabled[$i])
+	next
+
+	_GUICtrlListView_EndUpdate($hList)
+	$g_bCompareSaveSuspend = False
+endfunc
+
+func OnChange_CompareFilter()
+	RefreshCompareList()
+endfunc
+
+func OnClick_CompareAll()
+	SetVisibleCompareEnabled(True)
+endfunc
+
+func OnClick_CompareNone()
+	SetVisibleCompareEnabled(False)
+endfunc
+
+func SetVisibleCompareEnabled($bEnabled)
+	local $iCount = _GUICtrlListView_GetItemCount($g_idCompareList)
+	local $iStatId
+
+	$g_bCompareSaveSuspend = True
+	for $i = 0 to $iCount - 1
+		$iStatId = GetCompareListStatId($i)
+		if ($iStatId >= 0 and $iStatId < $g_iNumStats) then $g_abCompareEnabled[$iStatId] = $bEnabled
+		_GUICtrlListView_SetItemChecked($g_idCompareList, $i, $bEnabled)
+	next
+	$g_bCompareSaveSuspend = False
+	SaveGUICompare()
 endfunc
 
 func OnChange_NotifyRulesCombo()
@@ -2192,7 +2277,7 @@ EndFunc
 Func UpdateVisibleOptions()
     For $i = 0 To UBound($g_aOptionsControls) - 1
         Local $bVisible = ($i >= $g_iOptionsScrollPos And $i < $g_iOptionsScrollPos + $g_iOptionsVisibleLines)
-        Local $iYPos = 30 + ($i - $g_iOptionsScrollPos) * 25
+        Local $iYPos = _GUI_LineY(0) + ($i - $g_iOptionsScrollPos) * 25
 
         For $j = 0 To 1
             If $g_aOptionsControls[$i][$j] Then
@@ -2219,7 +2304,7 @@ Func WM_MOUSEWHEEL($hWnd, $iMsg, $wParam, $lParam)
     Local $iMouseY = BitShift($lParam, 16)
     
     If $iMouseX >= $aPos[0] And $iMouseX <= $aPos[0] + $aPos[2] And _
-       $iMouseY >= $aPos[1] + 25 And $iMouseY <= $aPos[1] + $aPos[3] - 60 Then
+       $iMouseY >= $aPos[1] + _GUI_LineY(0) And $iMouseY <= $aPos[1] + $aPos[3] - 60 Then
         
         Local $iDelta = BitShift($wParam, 16)
         If $iDelta > 0 Then
@@ -2569,7 +2654,7 @@ func CreateGUI()
 	global $g_iGroupWidth = 110
 	global $g_iGroupXStart = 8
 	global $g_iGUIWidth = 32 + 4 * $g_iGroupWidth
-	global $g_iGUIHeight = 330
+	global $g_iGUIHeight = 350
 
 	local $sTitle = not @Compiled ? "Test" : StringFormat("D2Stats %s - [%s]", FileGetVersion(@AutoItExe, "FileVersion"), FileGetVersion(@AutoItExe, "Comments"))
 
@@ -2583,17 +2668,21 @@ func CreateGUI()
 	global $g_idReadStats = GUICtrlCreateButton("Read", $g_iGroupXStart, $iBottomButtonCoords, 70, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_ReadStats")
 
-	global $g_idShowDiff = GUICtrlCreateButton("Diff and replace", $g_iGroupXStart + 78, $iBottomButtonCoords, 120, 25)
+	global $g_idShowDiff = GUICtrlCreateButton("Compare and replace", $g_iGroupXStart + 254, $iBottomButtonCoords, 140, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_ShowDiffAndReplace")
+	GUICtrlSetState(-1, $GUI_HIDE)
 
-	global $g_idShowDiffOnly = GUICtrlCreateButton("Diff", $g_iGroupXStart + 206, $iBottomButtonCoords, 70, 25)
+	global $g_idShowDiffOnly = GUICtrlCreateButton("Compare", $g_iGroupXStart + 166, $iBottomButtonCoords, 80, 25)
 	GUICtrlSetOnEvent(-1, "OnClick_ShowDiff")
+	GUICtrlSetState(-1, $GUI_HIDE)
 
-	global $g_idReadMercenary = GUICtrlCreateCheckbox("Mercenary", $g_iGroupXStart + 284, $iBottomButtonCoords + 1)
+	global $g_idReadMercenary = GUICtrlCreateCheckbox("Mercenary", $g_iGroupXStart + 78, $iBottomButtonCoords + 1)
 
-	global $g_idTab = GUICtrlCreateTab(0, 0, $g_iGUIWidth, 0, $TCS_FOCUSNEVER)
-	GUICtrlSetResizing (-1, $GUI_DOCKMENUBAR)
+	global $g_idTab = GUICtrlCreateTab(0, 0, $g_iGUIWidth, 44, BitOR($TCS_FOCUSNEVER, $TCS_MULTILINE, $TCS_BUTTONS, $TCS_FLATBUTTONS, $TCS_FIXEDWIDTH))
+	GUICtrlSetResizing(-1, BitOR($GUI_DOCKMENUBAR, $GUI_DOCKLEFT, $GUI_DOCKRIGHT))
 	GUICtrlSetOnEvent(-1, "OnClick_Tab")
+	GUICtrlSendMsg($g_idTab, $TCM_SETPADDING, 0, _WinAPI_MakeLong(1, 1))
+	GUICtrlSendMsg($g_idTab, $TCM_SETITEMSIZE, 0, _WinAPI_MakeLong(82, 20))
 
 #Region Stats
 	GUICtrlCreateTabItem("Basic")
@@ -2762,10 +2851,29 @@ func CreateGUI()
 
 	_GUI_GroupX(8)
 
+	GUICtrlCreateTabItem("Compare")
+	local $iFilterY = _GUI_LineY(0)
+	local $iCompareBtnW = 50
+	local $iFilterW = $g_iGUIWidth - 8 - 2 * $iCompareBtnW - 8
+	$g_idCompareFilter = GUICtrlCreateInput("", 4, $iFilterY, $iFilterW, 22)
+	GUICtrlCreateButton("All", 4 + $iFilterW + 4, $iFilterY, $iCompareBtnW, 22)
+	GUICtrlSetOnEvent(-1, "OnClick_CompareAll")
+	GUICtrlCreateButton("None", 4 + $iFilterW + 8 + $iCompareBtnW, $iFilterY, $iCompareBtnW, 22)
+	GUICtrlSetOnEvent(-1, "OnClick_CompareNone")
+
+	local $iListY = $iFilterY + 26
+	local $iListH = $iBottomButtonCoords - $iListY - 5
+	$g_idCompareList = GUICtrlCreateListView("ID|Name", 4, $iListY, $g_iGUIWidth - 8, $iListH, BitOR($LVS_REPORT, $GUI_SS_DEFAULT_LISTVIEW, $LVS_NOSORTHEADER))
+	_GUICtrlListView_SetExtendedListViewStyle($g_idCompareList, BitOR($LVS_EX_CHECKBOXES, $LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES, $LVS_EX_DOUBLEBUFFER))
+	_GUICtrlListView_SetColumnWidth($g_idCompareList, 0, 50)
+	_GUICtrlListView_SetColumnWidth($g_idCompareList, 1, $g_iGUIWidth - 90)
+	LoadGUICompare()
+	RefreshCompareList()
+
 	GUICtrlCreateTabItem("Options")
     
     ; Create scroll buttons
-    Local $idScrollUp = GUICtrlCreateButton("▲", $g_iGUIWidth - 20, 25, 18, 18)
+    Local $idScrollUp = GUICtrlCreateButton("▲", $g_iGUIWidth - 20, _GUI_LineY(0), 18, 18)
     GUICtrlSetOnEvent(-1, "OptionsScrollUp")
     Local $idScrollDown = GUICtrlCreateButton("▼", $g_iGUIWidth - 20, $g_iGUIHeight - 20, 18, 18)
     GUICtrlSetOnEvent(-1, "OptionsScrollDown")
@@ -2833,8 +2941,12 @@ func CreateGUI()
 	GUICtrlSetOnEvent(-1, "OnClick_Forum")
 
 	GUICtrlCreateTabItem("")
+	GUICtrlSendMsg($g_idTab, $TCM_SETITEMSIZE, 0, _WinAPI_MakeLong(82, 20))
+	GUICtrlCreateLabel("", 0, 44, $g_iGUIWidth, 2, $SS_ETCHEDHORZ)
+	GUICtrlSetResizing(-1, BitOR($GUI_DOCKTOP, $GUI_DOCKLEFT, $GUI_DOCKRIGHT, $GUI_DOCKHEIGHT))
 	UpdateGUI()
 	GUIRegisterMsg($WM_COMMAND, "WM_COMMAND")
+	GUIRegisterMsg($WM_NOTIFY, "WM_NOTIFY")
 	GUIRegisterMsg($WM_GETMINMAXINFO, "WM_GETMINMAXINFO")
 	GUIRegisterMsg($WM_MOUSEWHEEL, "WM_MOUSEWHEEL")
 	GUISetState(@SW_SHOW)
@@ -2947,6 +3059,95 @@ func LoadGUIVolume()
 	endif
 endfunc
 
+func SaveGUICompare()
+	IniWriteSection(@AutoItExe & ".ini", "Compare", "off=" & CompareDisabledToString())
+	$g_bCompareDirty = False
+endfunc
+
+func LoadGUICompare()
+	local $i
+	for $i = 0 to $g_iNumStats - 1
+		$g_abCompareEnabled[$i] = True
+	next
+
+	local $asIniCompare = IniReadSection(@AutoItExe & ".ini", "Compare")
+	if (@error) then return
+
+	local $sKey, $sValue, $iIndex, $bOldFormat = False
+	for $i = 1 to $asIniCompare[0][0]
+		$sKey = $asIniCompare[$i][0]
+		$sValue = $asIniCompare[$i][1]
+		if ($sKey = "off" or $sKey = "disabled") then
+			ApplyCompareDisabledString($sValue)
+		else
+			$iIndex = Int($sKey)
+			if (StringIsDigit($sKey) and $iIndex >= 0 and $iIndex < $g_iNumStats) then
+				$g_abCompareEnabled[$iIndex] = (Int($sValue) <> 0)
+				$bOldFormat = True
+			endif
+		endif
+	next
+
+	if ($bOldFormat) then SaveGUICompare()
+endfunc
+
+func CompareDisabledToString()
+	local $sOut = ""
+	local $iStart = -1
+	local $bOff, $i
+
+	for $i = 0 to $g_iNumStats
+		$bOff = ($i < $g_iNumStats and not $g_abCompareEnabled[$i])
+		if ($bOff) then
+			if ($iStart < 0) then $iStart = $i
+		elseif ($iStart >= 0) then
+			if ($sOut <> "") then $sOut &= ","
+			if ($iStart = $i - 1) then
+				$sOut &= $iStart
+			else
+				$sOut &= $iStart & "-" & ($i - 1)
+			endif
+			$iStart = -1
+		endif
+	next
+
+	return $sOut
+endfunc
+
+func ApplyCompareDisabledString($sOff)
+	if ($sOff = "") then return
+
+	local $aParts = StringSplit($sOff, ",", $STR_NOCOUNT)
+	local $sPart, $aRange, $iFrom, $iTo, $i, $j
+
+	for $i = 0 to UBound($aParts) - 1
+		$sPart = StringStripWS($aParts[$i], BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING))
+		if ($sPart = "") then continueloop
+
+		if (StringInStr($sPart, "-")) then
+			$aRange = StringSplit($sPart, "-", $STR_NOCOUNT)
+			if (UBound($aRange) < 2) then continueloop
+			$iFrom = Int($aRange[0])
+			$iTo = Int($aRange[1])
+		else
+			$iFrom = Int($sPart)
+			$iTo = $iFrom
+		endif
+
+		if ($iFrom > $iTo) then
+			$j = $iFrom
+			$iFrom = $iTo
+			$iTo = $j
+		endif
+		if ($iFrom < 0) then $iFrom = 0
+		if ($iTo >= $g_iNumStats) then $iTo = $g_iNumStats - 1
+
+		for $j = $iFrom to $iTo
+			$g_abCompareEnabled[$j] = False
+		next
+	next
+endfunc
+
 Func WM_COMMAND($hWnd, $iMsg, $wParam, $lParam)
 	Local $iIDFrom = BitAND($wParam, 0xFFFF)
 	Local $iCode = BitShift($wParam, 16)
@@ -2955,8 +3156,34 @@ Func WM_COMMAND($hWnd, $iMsg, $wParam, $lParam)
 		Switch $iIDFrom
 			Case $g_idNotifyEdit
 				OnChange_NotifyEdit()
+			Case $g_idCompareFilter
+				OnChange_CompareFilter()
 		EndSwitch
 	EndIf
+EndFunc
+
+Func WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
+	#forceref $hWnd, $iMsg, $wParam
+	If $g_bCompareSaveSuspend Or $g_idCompareList = 0 Then Return $GUI_RUNDEFMSG
+
+	Local $tNMHDR = DllStructCreate($tagNMHDR, $lParam)
+	If HWnd(DllStructGetData($tNMHDR, "hWndFrom")) <> GUICtrlGetHandle($g_idCompareList) Then Return $GUI_RUNDEFMSG
+	If DllStructGetData($tNMHDR, "Code") <> $LVN_ITEMCHANGED Then Return $GUI_RUNDEFMSG
+
+	Local $tInfo = DllStructCreate($tagNMLISTVIEW, $lParam)
+	If Not BitAND(DllStructGetData($tInfo, "Changed"), $LVIF_STATE) Then Return $GUI_RUNDEFMSG
+
+	Local $iNewState = DllStructGetData($tInfo, "NewState")
+	Local $iOldState = DllStructGetData($tInfo, "OldState")
+	If BitAND($iNewState, $LVIS_STATEIMAGEMASK) = BitAND($iOldState, $LVIS_STATEIMAGEMASK) Then Return $GUI_RUNDEFMSG
+
+	Local $iStatId = GetCompareListStatId(DllStructGetData($tInfo, "Item"))
+	If $iStatId < 0 Or $iStatId >= $g_iNumStats Then Return $GUI_RUNDEFMSG
+
+	$g_abCompareEnabled[$iStatId] = (BitShift(BitAND($iNewState, $LVIS_STATEIMAGEMASK), 12) = 2)
+	$g_bCompareDirty = True
+	SaveGUICompare()
+	Return $GUI_RUNDEFMSG
 EndFunc
 
 Func _GetDPI()
