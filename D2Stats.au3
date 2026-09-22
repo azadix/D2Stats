@@ -1462,22 +1462,24 @@ func DisplayStats($asStats)
     if (not UBound($asStats)) then return
 
     local $asCombinedStats = ""
+	local $bHasKeywordColumn = UBound($asStats, 2) > 2
 
     for $n = 0 to UBound($asStats) - 1
         local $statText = $asStats[$n][0]
         local $statColor = $asStats[$n][1]
+		local $bKeywordMatched = $bHasKeywordColumn ? $asStats[$n][2] : ($statColor == $ePrintRed)
 
         if ($statText == "") then continueLoop
 
         if (_GUI_Option("oneline-stats")) then
 			;Skip prefixes and suffixes when pringing oneline stat style
 			if StringInStr($statText, "Prefixes") = 0 AND StringInStr($statText, "Suffixes") = 0 then
-				if (ShouldPrintStat($statColor)) then
+				if (ShouldPrintStat($statColor, $bKeywordMatched)) then
 					$asCombinedStats &= $statText & ", "
 				endif
 			endif
         else
-            if (ShouldPrintStat($statColor)) then
+            if (ShouldPrintStat($statColor, $bKeywordMatched)) then
                 PrintString("  " & $statText, $statColor)
             endif
         endif
@@ -1493,9 +1495,9 @@ func DisplayStats($asStats)
 endfunc
 
 ;Determine whether a stat should be printed
-func ShouldPrintStat($color)
+func ShouldPrintStat($color, $bKeywordMatched = False)
     if (_GUI_Option("notify-only-filtered")) then
-        return $color == $ePrintRed
+        return $bKeywordMatched
     endif
     return True
 endfunc
@@ -1552,28 +1554,69 @@ func NarrowNotificationsPool($asNotificationsPool)
 	return $aNotifications
 endfunc
 
+; Map Diablo II ÿcX color codes to overlay print colors. Default remains blue.
+func GetD2StatPrintColor($sStat)
+	local $asCode = StringRegExp($sStat, "ÿc(.)", $STR_REGEXPARRAYMATCH)
+	if (@error) then return $ePrintBlue
+
+	select
+		case $asCode[0] == "0"
+			return $ePrintWhite
+		case $asCode[0] == "1"
+			return $ePrintRed
+		case $asCode[0] == "2"
+			return $ePrintLime
+		case $asCode[0] == "3"
+			return $ePrintBlue
+		case $asCode[0] == "4" or $asCode[0] == "7"
+			return $ePrintGold
+		case $asCode[0] == "5"
+			return $ePrintGrey
+		case $asCode[0] == "6"
+			return $ePrintBlack
+		case $asCode[0] == "8"
+			return $ePrintOrange
+		case $asCode[0] == "9"
+			return $ePrintYellow
+		case $asCode[0] == ":"
+			return $ePrintGreen
+		case $asCode[0] == ";"
+			return $ePrintPurple
+		case else
+			return $ePrintBlue
+	endselect
+endfunc
+
 func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
 	local $asStats = StringSplit($sGetItemStats, @LF)
-	local $aPlainStats[$asStats[0]][2]
-	local $aColoredStats[$asStats[0]][2]
+	local $aPlainStats[$asStats[0]][3]
+	local $aColoredStats[$asStats[0]][3]
 	local $iMatchCounter = 0
 
     for $k = 1 to $asStats[0]
         local $sStat = $asStats[$k]
-		
-		$aColoredStats[$asStats[0] - $k][0] = $sStat
-        $aColoredStats[$asStats[0] - $k][1] = $ePrintBlue
-		
-        $aPlainStats[$asStats[0] - $k][0] = $sStat
-        $aPlainStats[$asStats[0] - $k][1] = $ePrintBlue
-		
+		local $sStatText = StringRegExpReplace($sStat, "ÿc.", "")
+		local $iStatColor = GetD2StatPrintColor($sStat)
+		local $iRow = $asStats[0] - $k
+		local $bKeywordMatched = False
+
+		$aColoredStats[$iRow][0] = $sStatText
+        $aColoredStats[$iRow][1] = $iStatColor
+		$aColoredStats[$iRow][2] = False
+
+        $aPlainStats[$iRow][0] = $sStatText
+        $aPlainStats[$iRow][1] = $iStatColor
+		$aPlainStats[$iRow][2] = False
+
         for $i = 0 to UBound($asStatGroups) - 1
-            if ($asStatGroups[$i] == "" or $aColoredStats[$asStats[0] - $k][1] == $ePrintRed) then
+            if ($asStatGroups[$i] == "" or $bKeywordMatched) then
                 continueloop
             endif
 
-            if (StringRegExp(StringLower($sStat), StringLower($asStatGroups[$i]))) then
-                $aColoredStats[$asStats[0] - $k][1] = $ePrintRed
+            if (StringRegExp(StringLower($sStatText), StringLower($asStatGroups[$i]))) then
+                $aColoredStats[$iRow][1] = $ePrintRed
+				$aColoredStats[$iRow][2] = True
+                $bKeywordMatched = True
                 $iMatchCounter += 1
             endif
         next
