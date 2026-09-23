@@ -113,7 +113,7 @@ func DefineGlobals()
 	global $g_bNotifyCompile = True
 	global $g_bNotifierChanged = False
 
-	global const $g_iNumStats = 1024
+	global const $g_iNumStats = 512
 	global $g_aiStatsCache[2][$g_iNumStats]
 	global $g_aiStatsCacheCopy[2][$g_iNumStats]
 	global $g_abCompareEnabled[$g_iNumStats]
@@ -680,12 +680,12 @@ func UpdateStatValues()
 			$iTotal = GetStatValue($aiStats[$i*2 + 0], 1)
 			$iPercent = GetStatValue($aiStats[$i*2 + 1])
 
-			$g_aiStatsCache[1][900+$i] = Ceiling($iTotal / (1 + $iPercent / 100) - $iBase)
+			$g_aiStatsCache[1][240+$i] = Ceiling($iTotal / (1 + $iPercent / 100) - $iBase)
 		next
 
 		; Factor cap
 		local $iFactor = Floor((GetStatValue(278) * GetStatValue(0, 1) + GetStatValue(485) * GetStatValue(1, 1)) / 3e6 * 100)
-		$g_aiStatsCache[1][904] = $iFactor > 100 ? 100 : $iFactor
+		$g_aiStatsCache[1][244] = $iFactor > 100 ? 100 : $iFactor
 	endif
 endfunc
 
@@ -2719,10 +2719,10 @@ func CreateGUI()
 
 	_GUI_GroupNext()
 	_GUI_NewText(00, "Bonus stats")
-	_GUI_NewItem(01, "{359}%/{900}", "Strength")
-	_GUI_NewItem(02, "{360}%/{901}", "Dexterity")
-	_GUI_NewItem(03, "{362}%/{902}", "Vitality")
-	_GUI_NewItem(04, "{361}%/{903}", "Energy")
+	_GUI_NewItem(01, "{359}%/{240}", "Strength")
+	_GUI_NewItem(02, "{360}%/{241}", "Dexterity")
+	_GUI_NewItem(03, "{362}%/{242}", "Vitality")
+	_GUI_NewItem(04, "{361}%/{243}", "Energy")
 
 	_GUI_NewText(06, "Item/Skill", "Speed from items and skills behave differently. Use SpeedCalc to find your breakpoints")
 	_GUI_NewItem(07, "IAS: {093}%/{068}%", "Increased Attack Speed")
@@ -2768,7 +2768,7 @@ func CreateGUI()
 	GUICtrlCreateTabItem("Page 2")
 	_GUI_GroupFirst()
 	_GUI_NewItem(00, "SF: {485}", "Spell Focus")
-	_GUI_NewItem(01, "SF.Cap: {904}%", "Spell Focus cap. 100% means you don't benefit from more spell focus")
+	_GUI_NewItem(01, "SF.Cap: {244}%", "Spell Focus cap. 100% means you don't benefit from more spell focus")
 	_GUI_NewItem(02, "Buff.Dur: {409}%", "Buff/Debuff/Cold Skill Duration")
 	_GUI_NewItem(03, "Life Reg: {074}", "Life Regenerated per Second")
 	_GUI_NewItem(04, "Mana Reg: {027}%", "% Mana Regeneration per Second")
