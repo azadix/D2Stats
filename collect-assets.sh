@@ -1,10 +1,18 @@
 # /bin/bash
+set -e
 
-# 创建一个临时目录 dest
 rm -rf dest
 mkdir dest
 
-# 拷贝文件到 dest 目录
+if [ ! -f D2Stats.exe ]; then
+	echo "D2Stats.exe missing"
+	exit 1
+fi
+if [ ! -f D2Stats.Core.exe ]; then
+	echo "D2Stats.Core.exe missing — build core/ before packaging"
+	exit 1
+fi
+
 cp D2Stats.exe dest
-cp DropFilter.dll dest
+cp D2Stats.Core.exe dest
 cp -R Sounds dest

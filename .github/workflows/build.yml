@@ -26,6 +26,23 @@ jobs:
             - name: Replace versions
               run: bash replace-version.sh ${{ steps.tagName.outputs.tag }}
 
+            - name: Set up MSVC x86
+              uses: ilammy/msvc-dev-cmd@v1
+              with:
+                  arch: x86
+
+            - name: Cache D2Stats.Core.exe
+              id: core-cache
+              uses: actions/cache@v4
+              with:
+                  path: D2Stats.Core.exe
+                  key: d2stats-core-${{ hashFiles('core/d2stats_core.c', 'core/build.bat') }}
+
+            - name: Compile Core
+              if: steps.core-cache.outputs.cache-hit != 'true'
+              shell: cmd
+              run: core\build.bat
+
             - name: Compile
               shell: cmd
               run: ./Compile.bat

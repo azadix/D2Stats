@@ -7,8 +7,8 @@
 #include <HotKeyInput.au3>
 #include <GuiListView.au3>
 #include <Misc.au3>
-#include <NomadMemory.au3>
 #include <WinAPI.au3>
+#include "d2Core.au3"
 
 #include <AutoItConstants.au3>
 #include <ComboConstants.au3>
@@ -183,6 +183,11 @@ DefineGlobals()
 
 OnAutoItExitRegister("_Exit")
 
+if (not Core_Startup()) then
+	OnAutoItExitUnRegister("_Exit")
+	exit
+endif
+
 CreateGUI()
 Main()
 
@@ -242,6 +247,7 @@ func _Exit()
 	_GUICtrlHKI_Release()
 	GUIDelete()
 	_CloseHandle()
+	Core_Shutdown()
 	_LogSave()
 	exit
 endfunc
@@ -635,7 +641,7 @@ func UpdateStatValueMem($iVector)
 	next
 
 	local $tStats = DllStructCreate($tagStatsAll)
-	_WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pStatList, DllStructGetPtr($tStats), DllStructGetSize($tStats), 0)
+	Core_ReadProcessMemory($pStatList, DllStructGetPtr($tStats), DllStructGetSize($tStats))
 
 	local $iStatIndex, $iStatValue
 
@@ -1133,7 +1139,7 @@ func NotifierMain()
 
 		; while object observable
 		while $pUnit
-			_WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUnit, DllStructGetPtr($tUnitAny), DllStructGetSize($tUnitAny), 0)
+			Core_ReadProcessMemory($pUnit, DllStructGetPtr($tUnitAny), DllStructGetSize($tUnitAny))
 			$iUnitType = DllStructGetData($tUnitAny, "iUnitType")
 			$pUnitData = DllStructGetData($tUnitAny, "pUnitData")
 			$iUnitId = DllStructGetData($tUnitAny, "dwUnitId")
@@ -1150,7 +1156,7 @@ func NotifierMain()
 			
 			; iUnitType 4 = item
 			if ($iUnitType == 4) then
-				_WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUnitData, DllStructGetPtr($tItemData), DllStructGetSize($tItemData), 0)
+				Core_ReadProcessMemory($pUnitData, DllStructGetPtr($tItemData), DllStructGetSize($tItemData))
 				$iQuality = DllStructGetData($tItemData, "iQuality")
 				$iFlags = DllStructGetData($tItemData, "iFlags")
 				$iEarLevel = DllStructGetData($tItemData, "iEarLevel")
@@ -1170,7 +1176,7 @@ func NotifierMain()
 				; Match with notifier rules
 				for $j = 0 to UBound($g_avNotifyCompile) - 1
 					if (StringRegExp(StringLower($sType), StringLower($g_avNotifyCompile[$j][$eNotifyFlagsMatch]))) then
-		                _WinAPI_ReadProcessMemory($g_ahD2Handle[1], $pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt), 0)
+		                Core_ReadProcessMemory($pUniqueItemsTxt + ($iFileIndex * 0x14c), DllStructGetPtr($tUniqueItemsTxt), DllStructGetSize($tUniqueItemsTxt))
 		                local $iLvl = DllStructGetData($tUniqueItemsTxt, "wLvl")
 
 						$sMatchingLine = $g_avNotifyCompile[$j][$eNotifyFlagsMatch]
@@ -3245,17 +3251,8 @@ EndFunc
 
 #Region Injection
 func RemoteThread($pFunc, $iVar = 0) ; $var is in EBX register
-	local $aResult = DllCall($g_ahD2Handle[0], "ptr", "CreateRemoteThread", "ptr", $g_ahD2Handle[1], "ptr", 0, "uint", 0, "ptr", $pFunc, "ptr", $iVar, "dword", 0, "ptr", 0)
-	local $hThread = $aResult[0]
-	if ($hThread == 0) then return _Debug("RemoteThread", "Couldn't create remote thread.")
-
-	_WinAPI_WaitForSingleObject($hThread)
-
-	local $tDummy = DllStructCreate("dword")
-	DllCall($g_ahD2Handle[0], "bool", "GetExitCodeThread", "handle", $hThread, "ptr", DllStructGetPtr($tDummy))
-	local $iRet = Dec(Hex(DllStructGetData($tDummy, 1)))
-
-	_WinAPI_CloseHandle($hThread)
+	local $iRet = Core_RemoteThread($pFunc, $iVar)
+	if (@error) then return _Debug("RemoteThread", "Couldn't create remote thread.")
 	return $iRet
 endfunc
 
@@ -3460,7 +3457,7 @@ func UpdateDllHandles()
 	local $pLoadLibraryA = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "LoadLibraryA")
 	if (not $pLoadLibraryA) then return _Debug("UpdateDllHandles", "Couldn't retrieve LoadLibraryA address.")
 
-	local $pAllocAddress = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	local $pAllocAddress = Core_VirtualAllocEx(0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
 	if (@error) then return _Debug("UpdateDllHandles", "Failed to allocate memory.")
 
 	local $iDLLs = UBound($g_asDLL)
@@ -3486,13 +3483,13 @@ func UpdateDllHandles()
 	$g_pD2Client_GetItemStat = $pD2Inject + 0x3E
 	$g_pD2Common_GetUnitStat = $pD2Inject + 0x54
 	; Output buffer for injected GetItemStats (game wcscpy, no dest length)
-	$g_pD2InjectString = _MemVirtualAllocEx($g_ahD2Handle[1], 0, $g_iD2InjectStringBytes, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	$g_pD2InjectString = Core_VirtualAllocEx($g_iD2InjectStringBytes, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
 	;~ make room for params array
-	$g_pD2InjectParams = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	$g_pD2InjectParams = Core_VirtualAllocEx(0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
 
 	$g_pD2sgpt = _MemoryRead($g_hD2Common + 0x99E1C, $g_ahD2Handle)
 
-	_MemVirtualFreeEx($g_ahD2Handle[1], $pAllocAddress, 0x100, $MEM_RELEASE)
+	Core_VirtualFreeEx($pAllocAddress, 0x100, $MEM_RELEASE)
 	if (@error) then return _Debug("UpdateDllHandles", "Failed to free memory.")
 	if ($bFailed) then return _Debug("UpdateDllHandles", "Couldn't retrieve dll addresses.")
 

@@ -15,7 +15,11 @@
 
 ## FAQ
 ### "Windows defender/Antivirus removes/quarantines the exe file. Is it a virus?"
-This tool attaches itself to the `Game.exe` process and modifies memory to function properly. Due to this behaviour (and also frequent updates and small user pool) antivirus software label it as trojan. There is nothing i can do to fix it and i can only recommend to add .exe file to ignore/exception list.
+`D2Stats.Core.exe` attaches to the `Game.exe` process and reads/writes memory so the overlay can work. Antivirus software often flags that behaviour. Add **`D2Stats.Core.exe`** to your exclusion list once — that file stays the same between updates.
+
+Extract the full `D2Stats.zip` (both `D2Stats.exe` and `D2Stats.Core.exe`). Do not copy only `D2Stats.exe`. The zip itself may still be flagged because Core is inside it; after a one-time Core exclusion, updating `D2Stats.exe` should no longer get eaten.
+
+Releases: https://github.com/azadix/D2Stats/releases
 
 ### "Why can't i hide items using D2Stats?"
 Mod version 2.10 introduced in-game loot filtering system that disabled filtering using D2Stats. Current version only allows for notifying when certain item drops. All filters that still have `hide` and `show` keywords need to have them removed for notifier to function properly
