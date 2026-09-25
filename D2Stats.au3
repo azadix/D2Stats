@@ -105,7 +105,10 @@ func DefineGlobals()
 		$g_asNotifyFlags[$eNotifyFlagsSound][$i] = "sound" & $i
 	next
 
-	global const $g_sNotifierRulesDirectory = @WorkingDir & "\NotifierRules"
+	global const $g_sAppDir = @ScriptDir
+	global const $g_sSettingsIni = $g_sAppDir & "\D2Stats.exe.ini"
+	global const $g_sLogFile = $g_sAppDir & "\D2Stats-log.txt"
+	global const $g_sNotifierRulesDirectory = $g_sAppDir & "\NotifierRules"
 	global const $g_sNotifierRulesExtension = ".rules"
 	global $g_avNotifyCache[0][3]					; Name, Tier flag, Last line of name
 	global $g_avNotifyCompile[0][$eNotifyFlagsLast]	; Flags, Regex
@@ -314,7 +317,8 @@ endfunc
 
 func _LogSave()
 	if ($g_sLog <> "") then
-		local $hFile = FileOpen("D2Stats-log.txt", $FO_OVERWRITE)
+		local $hFile = FileOpen($g_sLogFile, $FO_OVERWRITE)
+		if ($hFile == -1) then return
 		FileWrite($hFile, $g_sLog)
 		FileFlush($hFile)
 		FileClose($hFile)
@@ -2972,11 +2976,11 @@ func SaveGUISettings()
 		
 		$sWrite &= StringFormat("%s=%s%s", $g_avGUIOptionList[$i][0], $vValue, @LF)
 	next
-	IniWriteSection(@AutoItExe & ".ini", "General", $sWrite)
+	IniWriteSection($g_sSettingsIni, "General", $sWrite)
 endfunc
 
 func LoadGUISettings()
-	local $asIniGeneral = IniReadSection(@AutoItExe & ".ini", "General")
+	local $asIniGeneral = IniReadSection($g_sSettingsIni, "General")
 	if (not @error) then
 		local $vValue
 		for $i = 1 to $asIniGeneral[0][0]
@@ -3013,11 +3017,11 @@ func SaveGUIVolume()
 	for $i = 0 to $g_iNumSounds - 1
 		$sWrite &= StringFormat("%s=%s%s", $i, _GUI_Volume($i), @LF)
 	next
-	IniWriteSection(@AutoItExe & ".ini", "Volume", $sWrite)
+	IniWriteSection($g_sSettingsIni, "Volume", $sWrite)
 endfunc
 
 func LoadGUIVolume()
-	local $asIniVolume = IniReadSection(@AutoItExe & ".ini", "Volume")
+	local $asIniVolume = IniReadSection($g_sSettingsIni, "Volume")
 	if (not @error) then
 		local $iIndex, $iValue
 		for $i = 1 to $asIniVolume[0][0]
@@ -3029,7 +3033,7 @@ func LoadGUIVolume()
 endfunc
 
 func SaveGUICompare()
-	IniWriteSection(@AutoItExe & ".ini", "Compare", "off=" & CompareDisabledToString())
+	IniWriteSection($g_sSettingsIni, "Compare", "off=" & CompareDisabledToString())
 	$g_bCompareDirty = False
 endfunc
 
@@ -3039,7 +3043,7 @@ func LoadGUICompare()
 		$g_abCompareEnabled[$i] = True
 	next
 
-	local $asIniCompare = IniReadSection(@AutoItExe & ".ini", "Compare")
+	local $asIniCompare = IniReadSection($g_sSettingsIni, "Compare")
 	if (@error) then return
 
 	local $sKey, $sValue, $iIndex, $bOldFormat = False
