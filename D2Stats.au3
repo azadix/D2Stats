@@ -898,7 +898,7 @@ func NotifierCache()
 	local $iItemsTxt = _MemoryRead($g_hD2Common + 0x9FB94, $g_ahD2Handle)
 	local $pItemsTxt = _MemoryRead($g_hD2Common + 0x9FB98, $g_ahD2Handle)
 
-	local $pBaseAddr, $iNameID, $sName, $asMatch, $sTier
+	local $pBaseAddr, $iNameID, $sName, $asMatch, $sTier, $iTierFlag
 
 	redim $g_avNotifyCache[$iItemsTxt][3]
 
@@ -917,32 +917,32 @@ func NotifierCache()
 			$asMatch = StringRegExp($sName, "[1-4]|\Q(Sacred)\E|\Q(Angelic)\E|\Q(Mastercrafted)\E", $STR_REGEXPARRAYGLOBALMATCH)
 			if (not @error) and IsArray($asMatch) then
 				if (Ubound($asMatch) > 1 or $asMatch[0] == "") then
-					MsgBox($MB_OK+$MB_ICONWARNING, "D2Stats NotifierCache error", StringFormat("Error while parsing item: '%s'", $sName))
 					_Debug("NotifierCache", StringFormat("Error while parsing item: '%s'", $sName))
-					exit
+					$sTier = "0"
+				else
+					select
+						Case $asMatch[0] == "(Sacred)"
+							$sTier = "sacred"
+						Case $asMatch[0] == "(Angelic)"
+							$sTier = "angelic"
+						Case $asMatch[0] == "(Mastercrafted)"
+							$sTier = "master"
+						Case Else
+							$sTier = $asMatch[0]
+					EndSelect
 				endif
-
-				select
-					Case $asMatch[0] == "(Sacred)"
-						$sTier = "sacred"
-					Case $asMatch[0] == "(Angelic)"
-						$sTier = "angelic"
-					Case $asMatch[0] == "(Mastercrafted)"
-						$sTier = "master"
-					Case Else
-						$sTier = $asMatch[0]
-				EndSelect
 			endif
 		endif
 
-		$g_avNotifyCache[$iClass][0] = $sName
-		$g_avNotifyCache[$iClass][1] = NotifierFlag($sTier)
-		$g_avNotifyCache[$iClass][2] = StringRegExpReplace($sName, ".+\|", "")
-		
+		$iTierFlag = NotifierFlag($sTier)
 		if (@error) then
 			_Debug("NotifierCache", StringFormat("Invalid tier flag '%s'", $sTier))
-			exit
+			$iTierFlag = NotifierFlag("0")
 		endif
+
+		$g_avNotifyCache[$iClass][0] = $sName
+		$g_avNotifyCache[$iClass][1] = $iTierFlag
+		$g_avNotifyCache[$iClass][2] = StringRegExpReplace($sName, ".+\|", "")
 	next
 endfunc
 
@@ -1161,6 +1161,8 @@ func NotifierMain()
 				if (not $g_bNotifierChanged and $iEarLevel <> 0) then continueloop
 				; We are showing items on ground by default
 				DisplayItemOnGround($pUnitData, true)
+
+				if ($iClass < 0 or $iClass >= UBound($g_avNotifyCache)) then continueloop
 				
 				$bIsEthereal = BitAND(0x400000, $iFlags) <> 0
 
@@ -1186,10 +1188,6 @@ func NotifierMain()
 
 						local $iFlagsCount = $g_aiFlagsCountPerLine[$j]
 
-						; On the ground display flags
-						local $bHideItem = $iFlagsColour == NotifierFlag("hide")
-						local $bShowItem = $iFlagsColour == NotifierFlag("show")
-
 						; For notification display flags
 						local $bNotEquipment = $iQuality == $eQualityNormal and $iTierFlag == NotifierFlag("0")
 						local $bShowItemName = $iFlagsDisplayName == NotifierFlag("name")
@@ -1203,10 +1201,7 @@ func NotifierMain()
                         ; convenient way to pass them to the function :)
 						local $oItemFlags = ObjCreate("Scripting.Dictionary")
 
-						; Collecting flags per item. We need them to display items on ground
-						; and to show notifications
-						$oItemFlags.add('$bHideItem', $bHideItem)
-						$oItemFlags.add('$bShowItem', $bShowItem)
+						; Collecting flags per item for overlay notifications
 						$oItemFlags.add('$iFlagsColour', $iFlagsColour)
 						$oItemFlags.add('$iFlagsSound', $iFlagsSound)
 						$oItemFlags.add('$asStatGroups', $asStatGroups)
@@ -1227,7 +1222,7 @@ func NotifierMain()
                         _ArrayAdd($aOnGroundDisplayPool, $aOnGroundItem)
 					endif
 				next
-				ProcessItems($aOnGroundDisplayPool)
+				if (UBound($aOnGroundDisplayPool) > 0) then ProcessItems($aOnGroundDisplayPool)
 			endif
 		wend
 
@@ -1238,12 +1233,10 @@ endfunc
 func ProcessItems(byref $aOnGroundDisplayPool)
 	local $asNotificationsPool[0][4]
 
-	local $bDelayedHideItem = False
-
-	local $asPreNotificationsPool = OnGroundFilterItems($aOnGroundDisplayPool, $bDelayedHideItem)
+	local $asPreNotificationsPool = OnGroundFilterItems($aOnGroundDisplayPool)
 	
 	; $asNotificationsPool represents an array of notifications per item base
-	$asNotificationsPool = FormatNotifications($asPreNotificationsPool, $bDelayedHideItem)
+	$asNotificationsPool = FormatNotifications($asPreNotificationsPool)
 	
 	; Display notifications from pool
 	DisplayNotification($asNotificationsPool)
@@ -1253,67 +1246,22 @@ func DisplayItemOnGround($pUnitData, $iShow)
 	_MemoryWrite($pUnitData + 0x48, $g_ahD2Handle, $iShow ? 1 : 2, "byte")		
 endfunc
 
-func OnGroundFilterItems(byref $aOnGroundDisplayPool, byref $bDelayedHideItem)
+func OnGroundFilterItems(byref $aOnGroundDisplayPool)
 	if (UBound($aOnGroundDisplayPool) == 0) then return
 
 	local $asPreNotificationsPool[0][4]
-	local $pUnitData
 
-	local $bShowOnGround = False
-	local $bHideCompletely = False
-	local $bDisplayNotification = False
-	local $bWithStatGroups = False
-	
 	for $i = 0 to UBound($aOnGroundDisplayPool) - 1
-		local $asType = $aOnGroundDisplayPool[$i][0]
-		local $oFlags = $aOnGroundDisplayPool[$i][1]
-		local $aNotification[1][4] = [[$asType, $oFlags]]
-		local $bStatGroupsExists = UBound($oFlags.item('$asStatGroups')) > 0
-		
-		$pUnitData = $oFlags.item('$pUnitData')
-
-		if ($bStatGroupsExists) then
-			$bWithStatGroups = True
-		endif
-
-		if ($oFlags.item('$bShowItem')) then
-			$bShowOnGround = True
-		elseif ($oFlags.item('$bHideItem')) then
-			$bHideCompletely = True
-		else
-			if (not $bStatGroupsExists) then $bDisplayNotification = True
-			_ArrayAdd($asPreNotificationsPool, $aNotification)
-		endif
+		local $aNotification[1][4] = [[$aOnGroundDisplayPool[$i][0], $aOnGroundDisplayPool[$i][1]]]
+		_ArrayAdd($asPreNotificationsPool, $aNotification)
 	next
 
-	; Clean "on ground" pool after items on ground display processing
+	; Clean "on ground" pool after processing
 	redim $aOnGroundDisplayPool[0][4]
-
-	select
-        case $bDisplayNotification
-			; Return pool of notifications if at least one rule without "show" or "hide" flags present
-			return $asPreNotificationsPool
-
-        case $bShowOnGround
-			DisplayItemOnGround($pUnitData, true)
-	        if ($bWithStatGroups) then return $asPreNotificationsPool
-
-        case $bHideCompletely
-			; if rule with "hide" flag is present and we have item stats matching group "in {} brackets"
-			; then we need to delay hiding the item until the stats check is completed (look in FormatNotifications)			
-			if ($bWithStatGroups) then
-				$bDelayedHideItem = True
-		        return $asPreNotificationsPool
-			else
-				DisplayItemOnGround($pUnitData, false)
-			endif
-
-        case $bWithStatGroups
-			return $asPreNotificationsPool
-    endselect
+	return $asPreNotificationsPool
 endfunc
 
-func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
+func FormatNotifications(byref $asPreNotificationsPool)
 	if (UBound($asPreNotificationsPool) == 0) then return
 	
 	local $asNotificationsPool[0][4]
@@ -1328,18 +1276,21 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 		local $iFlagsColour = $oFlags.item('$iFlagsColour')
 		local $bNotEquipment = $oFlags.item('$bNotEquipment')
 		local $iQuality = $oFlags.item('$iQuality')
-		local $bShowItem = $oFlags.item('$bShowItem')
 		local $bShowItemName = $oFlags.item('$bShowItemName')
-		local $pUnitData = $oFlags.item('$pUnitData')
 		local $iLvl = $oFlags.item('$iLvl')
 
 		local $bIsMatchByStats = False
 
 		local $asItem = GetItemName($pCurrentUnit)
 		local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
-        local $asItemType = $asItem[1]
+        local $asItemType = (IsArray($asItem) and UBound($asItem) >= 2) ? $asItem[1] : ""
         local $asItemStats = ""
-        local $iItemColor = $bNotEquipment ? $ePrintOrange : $g_iQualityColor[$iQuality]
+        local $iItemColor = $ePrintWhite
+		if ($bNotEquipment) then
+			$iItemColor = $ePrintOrange
+		elseif ($iQuality >= 0 and $iQuality < UBound($g_iQualityColor)) then
+			$iItemColor = $g_iQualityColor[$iQuality]
+		endif
         local $sPreName = ""
 		
         ; collect a reversed 2d array of stats and color
@@ -1356,13 +1307,6 @@ func FormatNotifications(byref $asPreNotificationsPool, $bDelayedHideItem)
 		
         ; Don't display notification if no match by stats from rule
         if (UBound($asStatGroups) and not $bIsMatchByStats) then
-            if ($bDelayedHideItem) then
-                ; if "hide" flag exist -> hide item from ground -> clean pool -> stop processing item
-                DisplayItemOnGround($pUnitData, False)
-                redim $asPreNotificationsPool[0][4]
-                exitloop
-            endif
-            ; else just skip item
 			continueloop
         endif
 
@@ -1726,14 +1670,14 @@ func _GUI_NewOption($iLine, $sOption, $sText, $sFunc = "")
     local $sOptionType = _GUI_OptionType($sOption)
 
 	switch $sOptionType
-		case null
+		case ""
 			_Log("_GUI_NewOption", "Invalid option '" & $sOption & "'")
-			exit
+			return $aControls
 		case "hk"
 			Call($sFunc, True)
 			if (@error == 0xDEAD and @extended == 0xBEEF) then
 				_Log("_GUI_NewOption", StringFormat("No hotkey function '%s' for option '%s'", $sFunc, $sOption))
-				exit
+				return $aControls
 			endif
 
 			local $iKeyCode = _GUI_Option($sOption)
@@ -1755,7 +1699,7 @@ func _GUI_NewOption($iLine, $sOption, $sText, $sFunc = "")
             $aControls[1] = GUICtrlCreateLabel($sText, 70, $iY + 4, Default, 22)
 		case else
 			_Log("_GUI_NewOption", "Invalid option type '" & $sOptionType & "'")
-			exit
+			return $aControls
 	endswitch
     
     $g_avGUIOption[0][0] += 1
@@ -1813,15 +1757,18 @@ func _GUI_OptionID($sOption)
 		if ($g_avGUIOptionList[$i][0] == $sOption) then return $i
 	next
 	_Log("_GUI_OptionID", "Invalid option '" & $sOption & "'")
-	exit
+	return SetError(1, 0, -1)
 endfunc
 
 func _GUI_OptionType($sOption)
-	return $g_avGUIOptionList[ _GUI_OptionID($sOption) ][2]
+	local $iOption = _GUI_OptionID($sOption)
+	if ($iOption < 0) then return SetError(@error, 0, "")
+	return $g_avGUIOptionList[$iOption][2]
 endfunc
 
 func _GUI_Option($sOption, $vValue = null)
 	local $iOption = _GUI_OptionID($sOption)
+	if ($iOption < 0) then return SetError(@error, 0, "")
 	local $vOld = $g_avGUIOptionList[$iOption][1]
 
 	if not ($vValue == null or $vValue == $vOld) then
@@ -1869,7 +1816,7 @@ func UpdateGUI()
 
 		if ($iMatches <> 0 and $iMatches <> 4) then
 			_Log("UpdateGUI", "Invalid coloring pattern '" & $sText & "'")
-			exit
+			continueloop
 		elseif ($iMatches == 4) then
 			$sText = StringReplace($sText, $asMatches[0], "")
 			$iColor = $g_iColorArray[$ePrintRed]
