@@ -1,10 +1,13 @@
-# /bin/bash
+#!/bin/bash
+set -euo pipefail
 
-# 创建一个临时目录 dest
 rm -rf dest
 mkdir dest
 
-# 拷贝文件到 dest 目录
+if [ ! -f D2Stats.exe ]; then
+	echo "D2Stats.exe is missing; compile before collecting assets." >&2
+	exit 1
+fi
+
 cp D2Stats.exe dest
-cp DropFilter.dll dest
 cp -R Sounds dest
