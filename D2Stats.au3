@@ -1723,20 +1723,33 @@ Func OnChange_OverlaySettings()
         EndIf
     Next
 
-    ; If we found a valid key, update the value
     If $sOptionKey <> "" Then
-        Local $sValue = GUICtrlRead($idCtrl)
-        _GUI_Option($sOptionKey, $sValue)
+        Local $iValue = ClampOverlayInt($sOptionKey, GUICtrlRead($idCtrl))
+        If String($iValue) <> GUICtrlRead($idCtrl) Then GUICtrlSetData($idCtrl, $iValue)
+        _GUI_Option($sOptionKey, $iValue)
 
-        ; Special handling for overlay options
-        If StringInStr($sOptionKey, "overlay-") Then
-            If $g_hOverlayGUI Then
-                GUIDelete($g_hOverlayGUI)
-                $g_hOverlayGUI = 0
-            EndIf
+        If StringInStr($sOptionKey, "overlay-") And $g_hOverlayGUI Then
+            ; Reposition only. Do not GUIDelete — that drops live overlay messages.
+            UpdateOverlayPosition()
         EndIf
     EndIf
 EndFunc
+
+func ClampOverlayInt($sOption, $vValue)
+	local $iValue = Int($vValue)
+	switch $sOption
+		case "overlay-x", "overlay-y"
+			if ($iValue < 1) then $iValue = 1
+		case "overlay-timeout"
+			if ($iValue < 500) then $iValue = 500
+			if ($iValue > 120000) then $iValue = 120000
+	endswitch
+	return $iValue
+endfunc
+
+func OverlayInt($sOption)
+	return ClampOverlayInt($sOption, _GUI_Option($sOption))
+endfunc
 
 
 func _GUI_OptionByRef($iOption, byref $sOption, byref $idControl, byref $sFunc)
@@ -2298,10 +2311,10 @@ Func CreateOverlayWindow()
     
     ; Create overlay covering full game width with small margins
     $g_hOverlayGUI = GUICreate("D2StatsOverlay", _
-                                $aPos[2] - _GUI_Option("overlay-x"), _
-                                $aPos[3] - _GUI_Option("overlay-y"), _
-                                $aPos[0] + _GUI_Option("overlay-x"), _
-                                $aPos[1] + _GUI_Option("overlay-y"), _
+                                $aPos[2] - OverlayInt("overlay-x"), _
+                                $aPos[3] - OverlayInt("overlay-y"), _
+                                $aPos[0] + OverlayInt("overlay-x"), _
+                                $aPos[1] + OverlayInt("overlay-y"), _
                                 $WS_POPUP, BitOR($WS_EX_LAYERED, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW, $WS_EX_TRANSPARENT))
     
     If @error Or $g_hOverlayGUI = 0 Then
@@ -2368,7 +2381,7 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     ; Split text into lines
     Local $aSplitText = _SplitTextToWidth($sText, $iTextWidth)
 	; Calculate row height based on font size
-	local $iRowHeight = Floor(_GUI_Option("overlay-fontsize") * 1.65)
+	local $iRowHeight = Floor(OverlayInt("overlay-fontsize") * 1.65)
 	
 	; Store in overlay history (keep max visible lines) - but not when in history mode
 	; Do this once per message, not per line
@@ -2428,13 +2441,13 @@ Func PrintString($sText, $iColor = $ePrintWhite)
         Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
         GUICtrlSetColor($idLabelBg, 0x0A0A0A)
         GUICtrlSetBkColor($idLabelBg, $GUI_BKCOLOR_TRANSPARENT)
-        GUICtrlSetFont($idLabelBg, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+        GUICtrlSetFont($idLabelBg, OverlayInt("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
         ; Foreground (colored text)
         Local $idLabel = GUICtrlCreateLabel($sLine, 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
         GUICtrlSetColor($idLabel, $iTextColor)
         GUICtrlSetBkColor($idLabel, $GUI_BKCOLOR_TRANSPARENT)
-        GUICtrlSetFont($idLabel, _GUI_Option("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+        GUICtrlSetFont($idLabel, OverlayInt("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
 
 		Local $iUBound = UBound($g_aMessages)
         ReDim $g_aMessages[$iUBound + 1][4]
@@ -2458,8 +2471,10 @@ Func _SplitTextToWidth($sText, $iMaxWidth)
     Local $aLines[0]
     
     ; Get average char width (monospace)
-    Local $iCharWidth = Floor((_GUI_Option("overlay-fontsize") * _GetDPI()[2]) * 0.85)
+    Local $iCharWidth = Floor((OverlayInt("overlay-fontsize") * _GetDPI()[2]) * 0.85)
+    If $iCharWidth < 1 Then $iCharWidth = 1
     Local $iMaxChars = Floor($iMaxWidth / $iCharWidth)
+    If $iMaxChars < 1 Then $iMaxChars = 1
     
     ; Split by paragraphs first
     Local $aParagraphs = StringSplit($sText, @CRLF, $STR_ENTIRESPLIT + $STR_NOCOUNT)
@@ -2519,7 +2534,7 @@ Func CleanUpExpiredText()
 
     For $i = 0 To UBound($g_aMessages) - 1
         ; Check if message should expire
-        If $g_aMessages[$i][2] <> 0 And TimerDiff($g_hScriptStartTime) >= $g_aMessages[$i][2] + _GUI_Option("overlay-timeout") Then
+        If $g_aMessages[$i][2] <> 0 And TimerDiff($g_hScriptStartTime) >= $g_aMessages[$i][2] + OverlayInt("overlay-timeout") Then
             ; Message expired - delete it
             GUICtrlDelete($g_aMessages[$i][0])  ; Delete background label
             GUICtrlDelete($g_aMessages[$i][1])   ; Delete foreground label
@@ -2968,6 +2983,7 @@ func LoadGUISettings()
 			if (_GUI_OptionExists($asIniGeneral[$i][0])) then
 				$vValue = $asIniGeneral[$i][1]
 				$vValue = _GUI_OptionType($asIniGeneral[$i][0]) == "tx" ? BinaryToString($vValue) : Int($vValue)
+				if (StringInStr($asIniGeneral[$i][0], "overlay-") == 1) then $vValue = ClampOverlayInt($asIniGeneral[$i][0], $vValue)
 				_GUI_Option($asIniGeneral[$i][0], $vValue)
 			endif
 		next
