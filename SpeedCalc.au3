@@ -2,6 +2,7 @@
 #include "speedcalcData.au3"
 
 #Region SpeedCalc globals
+global $g_iTabSpeedCalc = -1
 global $g_oScCof = 0
 global $g_bScCofReady = False
 
