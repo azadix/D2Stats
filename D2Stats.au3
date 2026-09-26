@@ -170,7 +170,7 @@ func DefineGlobals()
 		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings"], _
 		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings"], _
 		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings"], _
-		["overlay-contrast", 1, "cb", "Draw black contrast background behind overlay text"], _
+		["overlay-contrast", 1, "cb", "Draw black background behind overlay text"], _
 		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)"], _
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem"], _
