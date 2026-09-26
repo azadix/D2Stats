@@ -25,4 +25,5 @@ Not really. The current implementation is very unstable so i've decided on monos
   - Font size
   - X and Y offset (in pixels) from top-left edge of the window
   - Notification timeout duration (in milisecond)
+
 If you really want to change some properties that were not exposed on the application UI you'll have to edit the overlay code (`Overlay.au3`) and recompile it using provided script (`Compile.bat`)
