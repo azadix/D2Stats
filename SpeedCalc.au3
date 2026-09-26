@@ -13,6 +13,7 @@ global $g_ahScTable[4]
 global $g_aiScHighlightRow[4] = [-1, -1, -1, -1]
 
 global $g_sScClassList = ""
+global $g_sScMorphList = ""
 global $g_sScWeaponTypeList = ""
 global $g_sScWeaponBaseList = ""
 global $g_sScDebuffList = ""
@@ -24,7 +25,7 @@ global $g_sScLastFamilyToken = ""
 global $g_iScLastBaseCatalogCount = -1
 global $g_sScLastTableSig = ""
 
-global $g_iScLiveClass = 0
+global $g_iScLiveClass = -1
 global $g_iScLiveMercType = -1
 global $g_iScLiveUnitType = 0
 global $g_sScLiveWclass = ""
@@ -38,6 +39,8 @@ global $g_iScLiveFcr = 0
 global $g_iScLiveFhr = 0
 global $g_iScLiveSkillFhr = 0
 global $g_iScLiveFbr = 0
+global $g_sScLiveMorph = ""
+global $g_bScMorphSkillsCached = False
 
 global $g_avScWeaponBases[1][6]
 global $g_iScWeaponBaseCount = 0
@@ -53,13 +56,14 @@ global $g_avScClasses[][3] = [ _
 	[6, "Assassin", "AI"] _
 ]
 
-global $g_avScMorphs[][3] = [ _
-	["Werewolf", "40", "DZ"], _
-	["Werebear", "TG", "DZ"], _
-	["Wereowl", "OW", "DZ"], _
-	["Superbeast", "~Z", "PA"], _
-	["Deathlord", "0N", "NE"], _
-	["Treewarden", "TH", "BA"] _
+; Col 3 = states.txt id (-1 unknown). Captured in-game; skill 350 is omitted on morph nodes.
+global $g_avScMorphs[][5] = [ _
+	["Werewolf", "40", "DZ", 253, -1], _
+	["Werebear", "TG", "DZ", 140, -1], _
+	["Wereowl", "OW", "DZ", 231, -1], _
+	["Superbeast", "~Z", "PA", 161, -1], _
+	["Deathlord", "0N", "NE", -1, -1], _
+	["Treewarden", "TH", "BA", 292, 1765] _
 ]
 
 global $g_avScMercs[][3] = [ _
@@ -70,12 +74,14 @@ global $g_avScMercs[][3] = [ _
 	[4, "Son of Harrogath (Act 5)", "0A"] _
 ]
 
-global $g_avScDebuffs[][2] = [ _
-	["None", 0], _
-	["Decrepify", -20], _
-	["Phoboss", -20], _
-	["Uldyssian", -30], _
-	["Chill", -50] _
+; name, skill-slow (after diminishing), raw IAS adj, raw FCR adj
+global $g_avScDebuffs[][4] = [ _
+	["None", 0, 0, 0], _
+	["Decrepify", -20, 0, 0], _
+	["Phoboss", -20, 0, 0], _
+	["Uldyssian", -30, 0, 0], _
+	["Chill", -50, 0, 0], _
+	["Deimoss", 0, -100, -100] _
 ]
 
 global $g_avScWeaponTypes[][4] = [ _
@@ -169,7 +175,7 @@ endfunc
 
 func SpeedCalc_ClassToken($iId)
 	if ($iId >= 0 and $iId < UBound($g_avScClasses)) then return $g_avScClasses[$iId][2]
-	return "AM"
+	return ""
 endfunc
 
 func SpeedCalc_ClassName($iId)
@@ -545,11 +551,13 @@ func SpeedCalc_ReadLive()
 	local $iClass = DllStructGetData($tUnit, "iClass")
 
 	$g_iScLiveUnitType = $iUnitType
+	$g_sScLiveMorph = ""
 	if ($iUnitType == 1) then
 		$g_iScLiveMercType = SpeedCalc_ClassifyMerc($iClass)
 	else
 		if ($iClass >= 0 and $iClass <= 6) then $g_iScLiveClass = $iClass
 		$g_iScLiveMercType = -1
+		$g_sScLiveMorph = DetectUnitMorph()
 	endif
 
 	$g_iScLiveIas = GetStatValue(93)
@@ -787,14 +795,14 @@ func SpeedCalc_CreateTab()
 	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
 	$g_idScDebuff = GUICtrlCreateCombo("", $iSlowX, $iY, $iSlowW, 22, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
 	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScDualWield = GUICtrlCreateCheckbox("Dual Wield", $iSlowX + $iSlowW + 6, $iY, 82, 20)
+	$g_idScDualWield = GUICtrlCreateCheckbox("Dual Wield", $iSlowX + $iSlowW + 6, $iY, 90, 20)
 	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
 	$g_idScThrowing = GUICtrlCreateCheckbox("Throw", $iSlowX + $iSlowW + 94, $iY, 70, 20)
 	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
 	GUICtrlSetState($g_idScDualWield, $GUI_HIDE)
 	GUICtrlSetState($g_idScThrowing, $GUI_HIDE)
 
-	$g_idScStatus = GUICtrlCreateLabel("Empty fields use live item/skill stats. Auto follows equipped class and weapon.", 6, 124, $iW - 12, 14)
+	$g_idScStatus = GUICtrlCreateLabel("Empty fields use live item/skill stats. Auto follows class, morph, and weapon.", 6, 124, $iW - 12, 14)
 	GUICtrlSetColor(-1, 0x555555)
 
 	local $iTableW = 135
@@ -839,7 +847,6 @@ func SpeedCalc_RebuildClassCombo($bMerc)
 			$sData &= "|" & $g_avScMercs[$i][1]
 		next
 		GUICtrlSetState($g_idScMorph, $GUI_DISABLE)
-		GUICtrlSetData($g_idScMorph, "None", "None")
 	else
 		for $i = 0 to UBound($g_avScClasses) - 1
 			$sData &= "|" & $g_avScClasses[$i][1]
@@ -854,41 +861,52 @@ func SpeedCalc_RebuildClassCombo($bMerc)
 endfunc
 
 func SpeedCalc_RebuildMorphCombo()
-	local $sData = "None", $i
+	local $sData = "Auto|None", $i
 	for $i = 0 to UBound($g_avScMorphs) - 1
 		$sData &= "|" & $g_avScMorphs[$i][0]
 	next
-	GUICtrlSetData($g_idScMorph, "")
-	GUICtrlSetData($g_idScMorph, $sData, "None")
+	if ($sData <> $g_sScMorphList) then
+		GUICtrlSetData($g_idScMorph, "")
+		GUICtrlSetData($g_idScMorph, $sData, "Auto")
+		$g_sScMorphList = $sData
+	endif
 endfunc
 
 func SpeedCalc_RebuildDebuffCombo($sKeep = "")
 	local $sData = "", $i, $sSelect = ""
 	for $i = 0 to UBound($g_avScDebuffs) - 1
 		if ($i) then $sData &= "|"
-		$sData &= SpeedCalc_DebuffLabel($g_avScDebuffs[$i][0], $g_avScDebuffs[$i][1])
+		$sData &= SpeedCalc_DebuffLabel($i)
 	next
 	if ($sKeep <> "" and StringInStr("|" & $sData & "|", "|" & $sKeep & "|")) then
 		$sSelect = $sKeep
 	else
-		$sSelect = SpeedCalc_DebuffLabel($g_avScDebuffs[0][0], $g_avScDebuffs[0][1])
+		$sSelect = SpeedCalc_DebuffLabel(0)
 	endif
 	GUICtrlSetData($g_idScDebuff, "")
 	GUICtrlSetData($g_idScDebuff, $sData, $sSelect)
 	$g_sScDebuffList = $sData
 endfunc
 
-func SpeedCalc_DebuffLabel($sName, $iValue)
-	return $sName & " (" & $iValue & ")"
+func SpeedCalc_DebuffLabel($i)
+	local $sName = $g_avScDebuffs[$i][0]
+	if ($g_avScDebuffs[$i][2] <> 0 or $g_avScDebuffs[$i][3] <> 0) then
+		return $sName & " (" & $g_avScDebuffs[$i][2] & " IAS/FCR)"
+	endif
+	return $sName & " (" & $g_avScDebuffs[$i][1] & ")"
 endfunc
 
-func SpeedCalc_SelectedDebuffValue()
+func SpeedCalc_SelectedDebuffIndex()
 	local $sSel = GUICtrlRead($g_idScDebuff)
 	local $i
 	for $i = 0 to UBound($g_avScDebuffs) - 1
-		if (SpeedCalc_DebuffLabel($g_avScDebuffs[$i][0], $g_avScDebuffs[$i][1]) == $sSel) then return $g_avScDebuffs[$i][1]
+		if (SpeedCalc_DebuffLabel($i) == $sSel) then return $i
 	next
 	return 0
+endfunc
+
+func SpeedCalc_SelectedDebuffValue()
+	return $g_avScDebuffs[SpeedCalc_SelectedDebuffIndex()][1]
 endfunc
 
 func SpeedCalc_ReadOverride($id)
@@ -897,14 +915,26 @@ func SpeedCalc_ReadOverride($id)
 	return Int($s)
 endfunc
 
+func SpeedCalc_MorphToken($sName)
+	if ($sName == "" or $sName == "Auto" or $sName == "None") then return ""
+	local $i
+	for $i = 0 to UBound($g_avScMorphs) - 1
+		if ($g_avScMorphs[$i][0] == $sName) then return $g_avScMorphs[$i][1]
+	next
+	return ""
+endfunc
+
 func SpeedCalc_CurrentCharToken()
 	local $bMerc = SpeedCalc_IsMercChecked()
 	if (not $bMerc) then
 		local $sMorph = GUICtrlRead($g_idScMorph)
-		local $i
-		for $i = 0 to UBound($g_avScMorphs) - 1
-			if ($g_avScMorphs[$i][0] == $sMorph) then return $g_avScMorphs[$i][1]
-		next
+		local $sTok = ""
+		if ($sMorph == "Auto") then
+			$sTok = SpeedCalc_MorphToken($g_sScLiveMorph)
+		else
+			$sTok = SpeedCalc_MorphToken($sMorph)
+		endif
+		if ($sTok <> "") then return $sTok
 	endif
 
 	local $sClass = GUICtrlRead($g_idScClass)
@@ -923,14 +953,20 @@ func SpeedCalc_CurrentCharToken()
 
 	if ($bMerc) then
 		if ($g_iScLiveMercType >= 0) then return SpeedCalc_MercToken($g_iScLiveMercType)
-		return "RG"
+		return ""
 	endif
 	return SpeedCalc_ClassToken($g_iScLiveClass)
 endfunc
 
 func SpeedCalc_DisplayClassName($sCharToken)
 	local $sMorph = GUICtrlRead($g_idScMorph)
-	if (not SpeedCalc_IsMercChecked() and $sMorph <> "None" and $sMorph <> "") then return $sMorph
+	if (not SpeedCalc_IsMercChecked()) then
+		if ($sMorph == "Auto") then
+			if ($g_sScLiveMorph <> "") then return $g_sScLiveMorph
+		elseif ($sMorph <> "None" and $sMorph <> "") then
+			return $sMorph
+		endif
+	endif
 	local $i
 	if (SpeedCalc_IsMercChecked()) then
 		local $sClass = GUICtrlRead($g_idScClass)
@@ -1069,6 +1105,19 @@ func SpeedCalc_Refresh($bForce = False)
 	SpeedCalc_EnsureWeaponCatalog()
 
 	local $sCharToken = SpeedCalc_CurrentCharToken()
+	if ($sCharToken == "") then
+		GUICtrlSetData($g_idScStatus, "Not in game. Pick a class, or enter a game for Auto.")
+		if ($g_sScLastCharToken <> "" or $bForce or $g_sScLastTableSig <> "") then
+			local $iEmpty
+			for $iEmpty = 0 to 3
+				_GUICtrlListView_DeleteAllItems($g_idScTable[$iEmpty])
+				$g_aiScHighlightRow[$iEmpty] = -1
+			next
+			$g_sScLastCharToken = ""
+			$g_sScLastTableSig = ""
+		endif
+		return
+	endif
 	if ($sCharToken <> $g_sScLastCharToken) then
 		SpeedCalc_RebuildWeaponTypeCombo($sCharToken)
 		$g_sScLastCharToken = $sCharToken
@@ -1118,7 +1167,10 @@ func SpeedCalc_Refresh($bForce = False)
 	local $iFbr = SpeedCalc_ReadOverride($g_idScFbr)
 	if ($iFbr == Default) then $iFbr = $g_iScLiveFbr
 	local $iSkillFhr = $g_iScLiveSkillFhr
-	local $iSlow = SpeedCalc_SelectedDebuffValue()
+	local $iDebuff = SpeedCalc_SelectedDebuffIndex()
+	local $iSlow = $g_avScDebuffs[$iDebuff][1]
+	$iIas += $g_avScDebuffs[$iDebuff][2]
+	$iFcr += $g_avScDebuffs[$iDebuff][3]
 	local $bDw = $bCanDw and BitAND(GUICtrlRead($g_idScDualWield), $GUI_CHECKED)
 	local $bTh = $bCanThrow and BitAND(GUICtrlRead($g_idScThrowing), $GUI_CHECKED)
 

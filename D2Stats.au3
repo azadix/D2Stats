@@ -300,6 +300,7 @@ func UpdateHandle()
 	$g_iD2pid = $iPID
 	$g_pD2sgpt = _MemoryRead($g_hD2Common + 0x99E1C, $g_ahD2Handle)
 	$g_bScCatalogReady = False
+	$g_bScMorphSkillsCached = False
 endfunc
 
 func IsIngame()
@@ -884,6 +885,231 @@ func GetStatValue($iStatID, $iVector = default)
 	if ($iVector == default) then $iVector = $iStatID < 4 ? 0 : 1
 	local $iStatValue = $g_aiStatsCache[$iVector][$iStatID]
 	return Floor($iStatValue ? $iStatValue : 0)
+endfunc
+
+func IsProcessPtr($p)
+	return ($p >= 0x10000 and $p <= 0x7FFFFFFF)
+endfunc
+
+func MemAscii($p, $iLen)
+	if (not IsProcessPtr($p) or not IsArray($g_ahD2Handle)) then return ""
+	local $s = _MemoryRead($p, $g_ahD2Handle, "char[" & $iLen & "]")
+	local $sOut = "", $i, $sChar, $iAsc
+	for $i = 1 to StringLen($s)
+		$sChar = StringMid($s, $i, 1)
+		$iAsc = Asc($sChar)
+		if ($iAsc == 0) then exitloop
+		if ($iAsc >= 32 and $iAsc <= 126) then
+			$sOut &= $sChar
+		else
+			$sOut &= "."
+		endif
+	next
+	return $sOut
+endfunc
+
+func IsPlausibleCof($s)
+	if (StringLen($s) < 6 or StringLen($s) > 8) then return False
+	return StringRegExp($s, "^[A-Za-z0-9~]{2}[A-Z]{2}[A-Z0-9]{3,4}$") ? True : False
+endfunc
+
+func GetUnitCofString($pUnit)
+	if (not $pUnit or not IsArray($g_ahD2Handle)) then return ""
+	local $aiOff[2] = [0x50, 0x54]
+	local $n, $p, $p2, $s, $iAdd, $aiAdd[3] = [0, 4, 8]
+	for $n = 0 to 1
+		$p = _MemoryRead($pUnit + $aiOff[$n], $g_ahD2Handle)
+		if (not IsProcessPtr($p)) then continueloop
+		for $iAdd = 0 to 2
+			$s = StringUpper(MemAscii($p + $aiAdd[$iAdd], 8))
+			if (IsPlausibleCof($s)) then return $s
+		next
+		$p2 = _MemoryRead($p, $g_ahD2Handle)
+		if (IsProcessPtr($p2)) then
+			$s = StringUpper(MemAscii($p2, 8))
+			if (IsPlausibleCof($s)) then return $s
+		endif
+	next
+	return ""
+endfunc
+
+func GetUnitMorphToken($pUnit)
+	local $sCof = GetUnitCofString($pUnit)
+	if ($sCof == "") then return ""
+	return StringLeft($sCof, 2)
+endfunc
+
+func MorphNameFromToken($sTok)
+	if ($sTok == "") then return ""
+	local $j
+	for $j = 0 to UBound($g_avScMorphs) - 1
+		if ($g_avScMorphs[$j][1] == $sTok) then return $g_avScMorphs[$j][0]
+	next
+	return ""
+endfunc
+
+; Extra StatList nodes at StatListEx+0x3C. Read state from the current node, then follow +0x2C.
+; Columns: state, skill, owner type.
+func GetUnitExtraStatLists()
+	if (not IsIngame() or not IsArray($g_ahD2Handle)) then return 0
+
+	local $pUnitAddress = GetUnitToRead()
+	local $aiOffsets[3] = [0, 0x5C, 0x3C]
+	local $pStatList = _MemoryPointerRead($pUnitAddress, $g_ahD2Handle, $aiOffsets)
+	if (not $pStatList) then return 0
+
+	local $avList[1][3]
+	local $iCount = 0, $iGuard = 0
+	local $iOwnerType, $iStateID, $iSkillID, $pStats, $iStatCount, $pNext, $i, $iStatIndex, $iStatValue
+	local $sSeen = "|"
+
+	while $pStatList
+		$iGuard += 1
+		if ($iGuard > 256) then exitloop
+		if (StringInStr($sSeen, "|" & $pStatList & "|")) then exitloop
+		$sSeen &= $pStatList & "|"
+
+		$iOwnerType = _MemoryRead($pStatList + 0x08, $g_ahD2Handle)
+		$iStateID = _MemoryRead($pStatList + 0x14, $g_ahD2Handle)
+		$pStats = _MemoryRead($pStatList + 0x24, $g_ahD2Handle)
+		$iStatCount = _MemoryRead($pStatList + 0x28, $g_ahD2Handle, "word")
+		$pNext = _MemoryRead($pStatList + 0x2C, $g_ahD2Handle)
+
+		; Owner 4 = item lists. State 0 = run-start extra list, not a form.
+		if ($iOwnerType <> 4 and $iStateID > 0) then
+			$iSkillID = 0
+			if ($pStats and $iStatCount > 0 and $iStatCount < 512) then
+				for $i = 0 to $iStatCount - 1
+					$iStatIndex = _MemoryRead($pStats + $i * 8 + 2, $g_ahD2Handle, "word")
+					$iStatValue = _MemoryRead($pStats + $i * 8 + 4, $g_ahD2Handle, "int")
+					if ($iStatIndex == 350 and $iStatValue <> 511) then
+						$iSkillID = $iStatValue
+						exitloop
+					endif
+				next
+			endif
+			$iCount += 1
+			ReDim $avList[$iCount][3]
+			$avList[$iCount - 1][0] = $iStateID
+			$avList[$iCount - 1][1] = $iSkillID
+			$avList[$iCount - 1][2] = $iOwnerType
+		endif
+
+		if (not $pNext or $pNext == $pStatList) then exitloop
+		$pStatList = $pNext
+	wend
+
+	if ($iCount == 0) then return 0
+	return $avList
+endfunc
+
+func GetSkillTxtName($iSkillID)
+	if ($iSkillID <= 0 or $iSkillID == 511) then return ""
+	if (not $g_pD2sgpt or not IsArray($g_ahD2Handle)) then return ""
+
+	local $pSkillsTxt = _MemoryRead($g_pD2sgpt + 0xB98, $g_ahD2Handle)
+	if (not $pSkillsTxt) then return ""
+
+	local $iCount = _MemoryRead($g_pD2sgpt + 0xB9C, $g_ahD2Handle)
+	if ($iCount < 1 or $iCount > 8192) then $iCount = 8192
+	if ($iSkillID >= $iCount) then return ""
+
+	local $pRecord = $pSkillsTxt + 0x23C * $iSkillID
+	local $sName = StringStripWS(_MemoryRead($pRecord, $g_ahD2Handle, "char[32]"), 3)
+	if (IsPlausibleSkillName($sName)) then return $sName
+
+	local $pName = _MemoryRead($pRecord, $g_ahD2Handle)
+	if ($pName >= 0x10000 and $pName <= 0x7FFFFFFF) then
+		$sName = StringStripWS(_MemoryRead($pName, $g_ahD2Handle, "char[32]"), 3)
+		if (IsPlausibleSkillName($sName)) then return $sName
+	endif
+	return ""
+endfunc
+
+func IsPlausibleSkillName($sName)
+	if ($sName == "" or StringLen($sName) < 3 or StringLen($sName) > 32) then return False
+	return StringRegExp($sName, "^[A-Za-z][A-Za-z0-9_ ]*$") ? True : False
+endfunc
+
+func MorphSkillNameMatches($sMorph, $sSkill, $bLoose = False)
+	if ($sMorph == "" or $sSkill == "") then return False
+	if (StringCompare($sMorph, $sSkill, $STR_NOCASESENSEBASIC) == 0) then return True
+	local $sA = StringStripWS(StringReplace($sMorph, " ", ""), 8)
+	local $sB = StringStripWS(StringReplace($sSkill, " ", ""), 8)
+	if (StringCompare($sA, $sB, $STR_NOCASESENSEBASIC) == 0) then return True
+	if ($bLoose) then return StringInStr($sSkill, $sMorph, $STR_NOCASESENSEBASIC) <> 0
+	return False
+endfunc
+
+func CacheMorphSkillIds()
+	if ($g_bScMorphSkillsCached) then return
+	$g_bScMorphSkillsCached = True
+	if (not $g_pD2sgpt or not IsArray($g_ahD2Handle)) then return
+
+	local $pSkillsTxt = _MemoryRead($g_pD2sgpt + 0xB98, $g_ahD2Handle)
+	local $iCount = _MemoryRead($g_pD2sgpt + 0xB9C, $g_ahD2Handle)
+	if (not $pSkillsTxt or $iCount < 1 or $iCount > 8192) then return
+
+	local $i, $j, $sName, $bNeed
+	$bNeed = False
+	for $j = 0 to UBound($g_avScMorphs) - 1
+		if ($g_avScMorphs[$j][4] < 0) then $bNeed = True
+	next
+	if (not $bNeed) then return
+
+	for $i = 1 to $iCount - 1
+		$sName = GetSkillTxtName($i)
+		if ($sName == "") then continueloop
+		for $j = 0 to UBound($g_avScMorphs) - 1
+			if ($g_avScMorphs[$j][4] >= 0) then continueloop
+			if (MorphSkillNameMatches($g_avScMorphs[$j][0], $sName)) then $g_avScMorphs[$j][4] = $i
+		next
+	next
+endfunc
+
+func DetectUnitMorph()
+	CacheMorphSkillIds()
+	local $pUnit = _MemoryRead(GetUnitToRead(), $g_ahD2Handle)
+	local $avList = GetUnitExtraStatLists()
+	local $sTok = GetUnitMorphToken($pUnit)
+
+	local $sName = MorphNameFromToken($sTok)
+	if ($sName <> "") then return $sName
+
+	local $i, $j, $iState, $iSkill
+	if (not IsArray($avList)) then return ""
+
+	for $i = 0 to UBound($avList) - 1
+		$iState = $avList[$i][0]
+		for $j = 0 to UBound($g_avScMorphs) - 1
+			if ($g_avScMorphs[$j][3] >= 0 and $g_avScMorphs[$j][3] == $iState) then return $g_avScMorphs[$j][0]
+		next
+	next
+
+	for $i = 0 to UBound($avList) - 1
+		$iSkill = $avList[$i][1]
+		if ($iSkill <= 0) then continueloop
+		for $j = 0 to UBound($g_avScMorphs) - 1
+			if ($g_avScMorphs[$j][4] >= 0 and $g_avScMorphs[$j][4] == $iSkill) then
+				if ($g_avScMorphs[$j][3] < 0 and $avList[$i][0] > 0) then $g_avScMorphs[$j][3] = $avList[$i][0]
+				return $g_avScMorphs[$j][0]
+			endif
+		next
+	next
+
+	for $i = 0 to UBound($avList) - 1
+		$iSkill = $avList[$i][1]
+		$sName = GetSkillTxtName($iSkill)
+		if ($sName == "") then continueloop
+		for $j = 0 to UBound($g_avScMorphs) - 1
+			if (MorphSkillNameMatches($g_avScMorphs[$j][0], $sName, True)) then
+				$g_avScMorphs[$j][4] = $iSkill
+				if ($g_avScMorphs[$j][3] < 0 and $avList[$i][0] > 0) then $g_avScMorphs[$j][3] = $avList[$i][0]
+				return $g_avScMorphs[$j][0]
+			endif
+		next
+	next
+	return ""
 endfunc
 #EndRegion
 
