@@ -227,10 +227,7 @@ func Main()
 				$g_hTimerCopyName = 0
 			endif
 
-			if (GUICtrlRead($g_idTab) == $g_iTabSpeedCalc) then
-				if ($bIsIngame) then UpdateStatValues()
-				SpeedCalc_Refresh()
-			endif
+			if (GUICtrlRead($g_idTab) == $g_iTabSpeedCalc) then SpeedCalc_Refresh()
 
 			if ($g_hTimerCopyName and TimerDiff($g_hTimerCopyName) > 10000) then
 				$g_hTimerCopyName = 0
@@ -3153,9 +3150,14 @@ EndFunc
 
 Func WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
 	#forceref $hWnd, $iMsg, $wParam
+	Local $tNMHDR = DllStructCreate($tagNMHDR, $lParam)
+	If DllStructGetData($tNMHDR, "Code") = $NM_CUSTOMDRAW Then
+		Local $iScDraw = SpeedCalc_ListViewNotify($lParam)
+		If $iScDraw <> $GUI_RUNDEFMSG Then Return $iScDraw
+	EndIf
+
 	If $g_bCompareSaveSuspend Or $g_idCompareList = 0 Then Return $GUI_RUNDEFMSG
 
-	Local $tNMHDR = DllStructCreate($tagNMHDR, $lParam)
 	If HWnd(DllStructGetData($tNMHDR, "hWndFrom")) <> GUICtrlGetHandle($g_idCompareList) Then Return $GUI_RUNDEFMSG
 	If DllStructGetData($tNMHDR, "Code") <> $LVN_ITEMCHANGED Then Return $GUI_RUNDEFMSG
 
