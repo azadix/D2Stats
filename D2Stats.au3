@@ -154,7 +154,7 @@ func DefineGlobals()
 	global $g_bOverlayHistoryGroup = False  ; Group consecutive PrintString calls (one item notification)
 	global $g_iOverlayHistoryGroupLen = 0  ; Lines already stored in the current group
 
-	global const $g_iGUIOptionsGeneral = 14
+	global const $g_iGUIOptionsGeneral = 15
 	global const $g_iGUIOptionsHotkey = 4
 
 	global $g_avGUIOptionList[][5] = [ _
@@ -170,6 +170,7 @@ func DefineGlobals()
 		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings"], _
 		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings"], _
 		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings"], _
+		["overlay-contrast", 1, "cb", "Draw black contrast background behind overlay text"], _
 		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)"], _
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem"], _
@@ -2678,11 +2679,14 @@ Func PrintString($sText, $iColor = $ePrintWhite)
         Local $sLine = $aSplitText[$i]
         If $sLine = "" Then ContinueLoop ; Skip empty lines
 		
-        ; Background (black outline)
-        Local $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
-        GUICtrlSetColor($idLabelBg, 0x0A0A0A)
-        GUICtrlSetBkColor($idLabelBg, $GUI_BKCOLOR_TRANSPARENT)
-        GUICtrlSetFont($idLabelBg, OverlayInt("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+        ; Background (black outline) for contrast
+        Local $idLabelBg = 0
+        If _GUI_Option("overlay-contrast") Then
+            $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
+            GUICtrlSetColor($idLabelBg, 0x0A0A0A)
+            GUICtrlSetBkColor($idLabelBg, $GUI_BKCOLOR_TRANSPARENT)
+            GUICtrlSetFont($idLabelBg, OverlayInt("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+        EndIf
 
         ; Foreground (colored text)
         Local $idLabel = GUICtrlCreateLabel($sLine, 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
