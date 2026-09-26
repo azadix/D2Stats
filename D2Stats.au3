@@ -6,6 +6,7 @@
 #include <HotKey.au3>
 #include <HotKeyInput.au3>
 #include <GuiListView.au3>
+#include <ListViewConstants.au3>
 #include <Misc.au3>
 #include <NomadMemory.au3>
 #include <WinAPI.au3>
@@ -23,6 +24,7 @@
 
 #include "defaultNotifyText.au3"
 #include "d2StatDescriptions.au3"
+#include "SpeedCalc.au3"
 
 #pragma compile(Icon, Assets/icon.ico)
 #pragma compile(FileDescription, Diablo II Stats reader)
@@ -121,7 +123,8 @@ func DefineGlobals()
 	global $g_aiStatsCacheCopy[2][$g_iNumStats]
 	global $g_abCompareEnabled[$g_iNumStats]
 	global $g_idCompareList = 0, $g_idCompareFilter = 0
-	global $g_iTabCompare = 4
+	global $g_iTabSpeedCalc = -1
+	global $g_iTabCompare = -1
 	global $g_bCompareSaveSuspend = False
 	global $g_bCompareDirty = False
 
@@ -224,6 +227,11 @@ func Main()
 				$g_hTimerCopyName = 0
 			endif
 
+			if (GUICtrlRead($g_idTab) == $g_iTabSpeedCalc) then
+				if ($bIsIngame) then UpdateStatValues()
+				SpeedCalc_Refresh()
+			endif
+
 			if ($g_hTimerCopyName and TimerDiff($g_hTimerCopyName) > 10000) then
 				$g_hTimerCopyName = 0
 
@@ -294,6 +302,7 @@ func UpdateHandle()
 	$g_iUpdateFailCounter = 0
 	$g_iD2pid = $iPID
 	$g_pD2sgpt = _MemoryRead($g_hD2Common + 0x99E1C, $g_ahD2Handle)
+	$g_bScCatalogReady = False
 endfunc
 
 func IsIngame()
@@ -537,11 +546,11 @@ func ShowStatDiffDialog($aStats)
         Return
     EndIf
 
-    GUISetFont(9, 400, 0, "Courier New")
+    GUISetFont(10, 400, 0, "Courier New")
     GUISetBkColor(0xFFFFFF)
     
     Local $idList = GUICtrlCreateListView("ID|Name|Old|New|Diff", 10, 10, 840, 550)
-    GUICtrlSetFont(-1, 9, 400, 0, "Courier New")
+    GUICtrlSetFont(-1, 10, 400, 0, "Courier New")
     GUICtrlSetBkColor(-1, 0xFFFFFF)
     
     _GUICtrlListView_SetExtendedListViewStyle($idList, BitOR($LVS_EX_GRIDLINES, $LVS_EX_FULLROWSELECT))
@@ -1864,15 +1873,20 @@ func OnClick_ReadStats()
 	UpdateStatValues()
 	UpdateGUI()
 	$g_aiStatsCacheCopy = $g_aiStatsCache
+	SpeedCalc_Refresh(True)
 endfunc
 
 func OnClick_Tab()
 	local $iTab = GUICtrlRead($g_idTab)
-	local $iReadState = ($iTab < 3 or $iTab == $g_iTabCompare) ? $GUI_SHOW : $GUI_HIDE
+	local $bStatTab = ($iTab < 3 or $iTab == $g_iTabCompare)
+	local $bSpeedCalc = ($iTab == $g_iTabSpeedCalc)
+	local $iReadState = ($bStatTab or $bSpeedCalc) ? $GUI_SHOW : $GUI_HIDE
+	local $iCompareState = $bStatTab ? $GUI_SHOW : $GUI_HIDE
 	GUICtrlSetState($g_idReadStats, $iReadState)
 	GUICtrlSetState($g_idReadMercenary, $iReadState)
-	GUICtrlSetState($g_idShowDiff, $iReadState)
-	GUICtrlSetState($g_idShowDiffOnly, $iReadState)
+	GUICtrlSetState($g_idShowDiff, $iCompareState)
+	GUICtrlSetState($g_idShowDiffOnly, $iCompareState)
+	if ($bSpeedCalc) then SpeedCalc_Refresh(True)
 endfunc
 
 func GetCompareStatName($iStat)
@@ -2622,7 +2636,7 @@ EndFunc
 #EndRegion
 
 func CreateGUI()
-	global $g_iGroupWidth = 110
+	global $g_iGroupWidth = 135
 	global $g_iGroupXStart = 8
 	global $g_iGUIWidth = 32 + 4 * $g_iGroupWidth
 	global $g_iGUIHeight = 350
@@ -2822,7 +2836,9 @@ func CreateGUI()
 
 	_GUI_GroupX(8)
 
+	SpeedCalc_CreateTab()
 	GUICtrlCreateTabItem("Compare")
+	$g_iTabCompare = GUICtrlSendMsg($g_idTab, $TCM_GETITEMCOUNT, 0, 0) - 1
 	local $iFilterY = _GUI_LineY(0)
 	local $iCompareBtnW = 50
 	local $iFilterW = $g_iGUIWidth - 8 - 2 * $iCompareBtnW - 8
