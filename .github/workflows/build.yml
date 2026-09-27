@@ -24,14 +24,14 @@ jobs:
               uses: olegtarasov/get-tag@v2.1.1
 
             - name: Replace versions
-              run: bash replace-version.sh ${{ steps.tagName.outputs.tag }}
+              run: bash tools/replace-version.sh ${{ steps.tagName.outputs.tag }}
 
             - name: Compile
               shell: cmd
               run: ./Compile.bat
 
             - name: Collect Assets
-              run: bash collect-assets.sh
+              run: bash tools/collect-assets.sh
 
             - name: Zip file
               uses: TheDoctor0/zip-release@0.6.0

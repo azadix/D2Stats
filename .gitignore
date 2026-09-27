@@ -2,10 +2,8 @@
 D2Stats*.exe
 D2Stats*.txt
 speedcalc-weapons.txt
-mxl-txts/*
 NotifierRules/*
 *.rar
 dist/
 dest/
 .idea/
-kek*.txt

@@ -1,13 +1,13 @@
 #!/bin/bash
-# Fetch Median XL SpeedcalcData.txt and regenerate speedcalcData.au3.
-# Run from the repo root when MXL animation data changes, then recompile.
+# Fetch Median XL SpeedcalcData.txt and regenerate src/speedcalcData.au3.
+# Run from anywhere; the script cds to the repo root. Then recompile.
 # On Windows use Git Bash. D2Stats.exe does not download this file.
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 URL="https://dev.median-xl.com/speedcalc/SpeedcalcData.txt"
-OUT="speedcalcData.au3"
+OUT="src/speedcalcData.au3"
 DATE=$(date +"%Y-%m-%d")
 
 TMP=$(mktemp)
@@ -37,7 +37,7 @@ fi
 	echo "; Source: $URL"
 	echo "; Generated: $DATE ($rows entries)"
 	echo ";"
-	echo "; Do not edit by hand. Re-run update-speedcalc-data.sh when Median XL"
+	echo "; Do not edit by hand. Re-run tools/update-speedcalc-data.sh when Median XL"
 	echo "; animation data changes, then recompile D2Stats."
 	echo ""
 	echo "global \$g_avSpeedcalcData[][3] = [ _"

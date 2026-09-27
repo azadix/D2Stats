@@ -2,7 +2,7 @@
 ; Source: https://dev.median-xl.com/speedcalc/SpeedcalcData.txt
 ; Generated: 2026-09-26 (322 entries)
 ;
-; Do not edit by hand. Re-run update-speedcalc-data.sh when Median XL
+; Do not edit by hand. Re-run tools/update-speedcalc-data.sh when Median XL
 ; animation data changes, then recompile D2Stats.
 
 global $g_avSpeedcalcData[][3] = [ _

@@ -1,4 +1,5 @@
-# /bin/bash
+#!/bin/bash
+cd "$(dirname "$0")/.."
 
 version=$1
 buildTime=$(date +"%Y-%m-%d")

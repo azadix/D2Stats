@@ -25,4 +25,12 @@ Not really. The current implementation is very unstable so i've decided on monos
   - Font size
   - X and Y offset (in pixels) from top-left edge of the window
   - Notification timeout duration (in milisecond)
-If you really want to change some properties that were not exposed on the application UI you'll have to edit the overlay code (`Overlay.au3`) and recompile it using provided script (`Compile.bat`)
+If you really want to change some properties that were not exposed on the application UI you'll have to edit the overlay code (`src/Overlay.au3`) and recompile it using provided script (`Compile.bat`)
+
+## Layout
+- `D2Stats.au3` — application entry point (keep at repo root so runtime files stay beside the exe)
+- `src/` — feature modules
+- `Sounds/` — notifier audio, shipped next to the exe
+- `Assets/` — icon and README screenshots
+- `vendor/` — bundled AutoIt interpreter, compiler, and UDFs
+- `tools/` — version stamp, release packaging, and speedcalc data update

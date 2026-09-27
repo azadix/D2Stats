@@ -22,8 +22,8 @@
 #include <TabConstants.au3>
 #include <WindowsConstants.au3>
 
-#include "defaultNotifyText.au3"
-#include "d2StatDescriptions.au3"
+#include "src/defaultNotifyText.au3"
+#include "src/d2StatDescriptions.au3"
 
 #pragma compile(Icon, Assets/icon.ico)
 #pragma compile(FileDescription, Diablo II Stats reader)
@@ -121,13 +121,13 @@ endfunc
 
 DefineGlobals()
 
-#include "GameMemory.au3"
-#include "Overlay.au3"
-#include "StatsRead.au3"
-#include "Notifier.au3"
-#include "Compare.au3"
-#include "Hotkeys.au3"
-#include "SpeedCalc.au3"
+#include "src/GameMemory.au3"
+#include "src/Overlay.au3"
+#include "src/StatsRead.au3"
+#include "src/Notifier.au3"
+#include "src/Compare.au3"
+#include "src/Hotkeys.au3"
+#include "src/SpeedCalc.au3"
 
 OnAutoItExitRegister("_Exit")
 
