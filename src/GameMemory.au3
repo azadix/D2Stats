@@ -1,10 +1,14 @@
 #include-once
 
 #Region GameMemory globals
-global $g_hD2Client, $g_hD2Common, $g_hD2Win, $g_hD2Lang, $g_hD2Sigma
+global $g_hD2Client, $g_hD2Common, $g_hD2Win, $g_hD2Lang, $g_hD2Sigma, $g_hGameExe
 global $g_ahD2Handle
 global $g_iD2pid, $g_iUpdateFailCounter
 global $g_pD2sgpt, $g_pD2InjectPrint, $g_pD2InjectString, $g_pD2InjectParams, $g_pD2InjectGetString, $g_pD2Client_GetItemName, $g_pD2Client_GetItemStat, $g_pD2Common_GetUnitStat
+global $g_pHoverTextBuffer, $g_pHoverTextHook, $g_pDrawFramedText
+global const $g_iD2WinDrawFramedTextOrd = 10085
+global const $g_iHoverTextWChars = 8192
+global const $g_iHoverTextBytes = $g_iHoverTextWChars * 2
 #EndRegion
 
 #Region GameMemory
@@ -226,7 +230,190 @@ func InjectFunctions()
 	$sWrite = "0x6A00FF33FF7304E8" & SwapEndian($iIDWNT3) & "A3" & SwapEndian($g_pD2InjectString) & "C3"
 	local $bGetUnitStat = InjectCode($g_pD2Common_GetUnitStat, $sWrite)
 
+	; Capture DrawFramedText's string so hover-copy works with vanilla text and D2GL HD Text.
+	; Failure is non-fatal: ReadHoverText still uses D2Win's scratch buffer.
+	InjectHoverTextHook()
+
 	return $bPrint and $bGetString and $bGetItemName and $bGetItemStat and $bGetUnitStat
+endfunc
+
+func PtrEq($pA, $pB)
+	return Hex($pA, 8) == Hex($pB, 8)
+endfunc
+
+func MemoryWriteDwordProtected($pAddress, $iValue)
+	local $aProtect = DllCall($g_ahD2Handle[0], "bool", "VirtualProtectEx", "handle", $g_ahD2Handle[1], "ptr", $pAddress, "ulong_ptr", 4, "dword", $PAGE_EXECUTE_READWRITE, "dword*", 0)
+	local $iOld = 0
+	if (IsArray($aProtect) and $aProtect[0]) then $iOld = $aProtect[5]
+
+	local $bOk = _MemoryWrite($pAddress, $g_ahD2Handle, $iValue, "dword")
+
+	if ($iOld) then
+		DllCall($g_ahD2Handle[0], "bool", "VirtualProtectEx", "handle", $g_ahD2Handle[1], "ptr", $pAddress, "ulong_ptr", 4, "dword", $iOld, "dword*", 0)
+	endif
+
+	return $bOk
+endfunc
+
+func RemoteGetProcOrdinal($hModule, $iOrdinal)
+	local $pGetProcAddress = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "GetProcAddress")
+	if (not $pGetProcAddress) then return 0
+
+	local $pStub = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x20, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	if (not $pStub) then return 0
+
+	; push ordinal; push hModule; mov eax, GetProcAddress; call eax; ret
+	local $sWrite = "0x68" & SwapEndian($iOrdinal) & "68" & SwapEndian($hModule) & "B8" & SwapEndian($pGetProcAddress) & "FFD0C3"
+	local $pFunc = 0
+	if (InjectCode($pStub, $sWrite)) then $pFunc = RemoteThread($pStub, 0)
+
+	_MemVirtualFreeEx($g_ahD2Handle[1], $pStub, 0, $MEM_RELEASE)
+	return $pFunc
+endfunc
+
+func GetPeImportDirRva($hModule)
+	local $iLfanew = _MemoryRead($hModule + 0x3C, $g_ahD2Handle, "dword")
+	if ($iLfanew < 0x40 or $iLfanew > 0x1000) then return 0
+
+	local $iMagic = _MemoryRead($hModule + $iLfanew + 24, $g_ahD2Handle, "word")
+	if ($iMagic <> 0x10B) then return 0 ; IMAGE_NT_OPTIONAL_HDR32_MAGIC
+
+	return _MemoryRead($hModule + $iLfanew + 0x80, $g_ahD2Handle, "dword")
+endfunc
+
+; Returns IAT slot addresses for D2Win ordinal 10085 (DrawFramedText on 1.13c).
+func FindDrawFramedTextIatSlots($hModule, $pDrawFramedText)
+	local $aSlots[8]
+	local $iCount = 0
+	if (not $hModule) then return $aSlots
+
+	local $iImportRva = GetPeImportDirRva($hModule)
+	if (not $iImportRva) then return $aSlots
+
+	local $pDesc = $hModule + $iImportRva
+	local $iDesc
+	for $iDesc = 1 to 64
+		local $iNameRva = _MemoryRead($pDesc + 12, $g_ahD2Handle, "dword")
+		if (not $iNameRva) then exitloop
+
+		local $sDllName = StringLower(_MemoryRead($hModule + $iNameRva, $g_ahD2Handle, "char[64]"))
+		local $iOrigThunk = _MemoryRead($pDesc, $g_ahD2Handle, "dword")
+		local $iFirstThunk = _MemoryRead($pDesc + 16, $g_ahD2Handle, "dword")
+		$pDesc += 20
+
+		if ($sDllName <> "d2win.dll" or not $iFirstThunk) then continueloop
+
+		local $pIlt = 0
+		if ($iOrigThunk) then $pIlt = $hModule + $iOrigThunk
+		local $pIat = $hModule + $iFirstThunk
+
+		local $iThunk
+		for $iThunk = 0 to 512
+			local $iIatVal = _MemoryRead($pIat, $g_ahD2Handle, "dword")
+			if (not $iIatVal) then exitloop
+
+			local $bMatch = False
+			if ($pIlt) then
+				local $iIltVal = _MemoryRead($pIlt, $g_ahD2Handle, "dword")
+				if (not $iIltVal) then exitloop
+				if (StringLeft(Hex($iIltVal, 8), 4) == "8000" and Dec(StringRight(Hex($iIltVal, 8), 4)) == $g_iD2WinDrawFramedTextOrd) then $bMatch = True
+			endif
+			if ((not $bMatch) and $pDrawFramedText and PtrEq($iIatVal, $pDrawFramedText)) then $bMatch = True
+
+			if ($bMatch) then
+				$aSlots[$iCount] = $pIat
+				$iCount += 1
+				if ($iCount >= UBound($aSlots)) then exitloop 2
+			endif
+
+			$pIat += 4
+			if ($pIlt) then $pIlt += 4
+		next
+	next
+
+	; Sentinel: unused slots stay 0
+	return $aSlots
+endfunc
+
+func InjectHoverTextHook()
+	if (not $g_pHoverTextHook or not $g_pHoverTextBuffer) then return False
+
+	if (not $g_pDrawFramedText) then
+		$g_pDrawFramedText = RemoteGetProcOrdinal($g_hD2Win, $g_iD2WinDrawFramedTextOrd)
+	endif
+
+	local $ahModules[5] = [$g_hD2Client, $g_hD2Sigma, $g_hD2Common, $g_hD2Lang, $g_hGameExe]
+	local $aPatchSlots[8]
+	local $iPatchCount = 0
+	local $pOriginal = 0
+	local $iFound = 0
+	local $iMod, $iSlot
+
+	for $iMod = 0 to UBound($ahModules) - 1
+		local $aSlots = FindDrawFramedTextIatSlots($ahModules[$iMod], $g_pDrawFramedText)
+		for $iSlot = 0 to UBound($aSlots) - 1
+			if (not $aSlots[$iSlot]) then continueloop
+
+			$iFound += 1
+			local $pIatVal = _MemoryRead($aSlots[$iSlot], $g_ahD2Handle, "dword")
+			if (PtrEq($pIatVal, $g_pHoverTextHook)) then continueloop
+
+			if (not $pOriginal) then $pOriginal = $pIatVal
+			$aPatchSlots[$iPatchCount] = $aSlots[$iSlot]
+			$iPatchCount += 1
+			if ($iPatchCount >= UBound($aPatchSlots)) then exitloop 2
+		next
+	next
+
+	if (not $iFound) then return False
+	if (not $iPatchCount) then return True
+	if (not $pOriginal) then return False
+
+#cs
+	pushad
+	cld
+	mov esi, ecx            ; DrawFramedText is __fastcall; str in ECX
+	test esi, esi
+	jz skip
+	cmp word ptr [esi], 0
+	je skip
+	mov edi, hoverBuffer
+	mov ecx, 8191
+copy:
+	lodsw
+	stosw
+	test ax, ax
+	jz skip
+	loop copy
+	xor ax, ax
+	stosw
+skip:
+	popad
+	push original
+	ret
+#ce
+	local $sWrite = "0x60FC8BF185F6742066833E00741ABF" & SwapEndian($g_pHoverTextBuffer) & "B9FF1F000066AD66AB6685C07407E2F56631C066AB6168" & SwapEndian($pOriginal) & "C3"
+	if (not InjectCode($g_pHoverTextHook, $sWrite)) then return False
+
+	local $bPatched = False
+	for $iSlot = 0 to $iPatchCount - 1
+		if (MemoryWriteDwordProtected($aPatchSlots[$iSlot], $g_pHoverTextHook)) then $bPatched = True
+	next
+
+	return $bPatched
+endfunc
+
+func ReadHoverText()
+	local $sOutput = ""
+
+	if ($g_pHoverTextBuffer) then
+		$sOutput = _MemoryRead($g_pHoverTextBuffer, $g_ahD2Handle, StringFormat("wchar[%s]", $g_iHoverTextWChars))
+		if ($sOutput <> "") then return $sOutput
+	endif
+
+	; Vanilla D2Win DrawFramedText fills this scratch buffer; D2GL HD Text does not.
+	local $aiOffsets[2] = [0, 0]
+	return _MemoryPointerRead($g_hD2Win + 0x1191F, $g_ahD2Handle, $aiOffsets, StringFormat("wchar[%s]", $g_iHoverTextWChars))
 endfunc
 
 func UpdateDllHandles()
@@ -252,6 +439,10 @@ func UpdateDllHandles()
 	$g_hD2Lang = $hDLLHandle[3]
 	$g_hD2Sigma = $hDLLHandle[4]
 
+	$g_hGameExe = 0
+	local $pGetModuleHandleA = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "GetModuleHandleA")
+	if ($pGetModuleHandleA) then $g_hGameExe = RemoteThread($pGetModuleHandleA, 0)
+
 	local $pD2Inject = $g_hD2Client + 0xCDE00
 	$g_pD2InjectPrint = $pD2Inject + 0x01 ; memory alignment
 	$g_pD2InjectGetString = $pD2Inject + 0x11
@@ -262,6 +453,11 @@ func UpdateDllHandles()
 	$g_pD2InjectString = _MemVirtualAllocEx($g_ahD2Handle[1], 0, $g_iD2InjectStringBytes, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
 	;~ make room for params array
 	$g_pD2InjectParams = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+
+	$g_pDrawFramedText = 0
+	$g_pHoverTextBuffer = _MemVirtualAllocEx($g_ahD2Handle[1], 0, $g_iHoverTextBytes, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	$g_pHoverTextHook = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x40, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	if ($g_pHoverTextBuffer) then _MemoryWrite($g_pHoverTextBuffer, $g_ahD2Handle, 0, StringFormat("byte[%s]", $g_iHoverTextBytes))
 
 	$g_pD2sgpt = _MemoryRead($g_hD2Common + 0x99E1C, $g_ahD2Handle)
 

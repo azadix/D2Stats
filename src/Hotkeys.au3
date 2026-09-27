@@ -58,11 +58,9 @@ func HotKey_CopyItem($TEST = False)
 
 	local $hTimerRetry = TimerInit()
 	local $sOutput = ""
-	local $aiOffsets[2] = [0, 0]
 
 	while ($sOutput == "" and TimerDiff($hTimerRetry) < 10)
-		$sOutput = _MemoryPointerRead($g_hD2Win + 0x1191F, $g_ahD2Handle, $aiOffsets, "wchar[8192]")
-		;$sOutput = _MemoryRead(0x00191FA4, $g_ahD2Handle, "wchar[2048]") ; Magic?
+		$sOutput = ReadHoverText()
 	wend
 
 	if (StringLen($sOutput) == 0) then
