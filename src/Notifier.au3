@@ -19,7 +19,7 @@ global $g_idVolumeSlider
 
 global const $g_sNotifierRulesDirectory = $g_sAppDir & "\NotifierRules"
 global const $g_sNotifierRulesExtension = ".rules"
-global $g_avNotifyCache[0][3]					; Name, Tier flag, Last line of name
+global $g_avNotifyCache[0][4]					; Name, Tier flag, Last line of name, Can have sockets
 global $g_avNotifyCompile[0][$eNotifyFlagsLast]	; Flags, Regex
 global $g_bNotifyCache = True
 global $g_bNotifyCompile = True
@@ -50,9 +50,9 @@ func NotifierCache()
 	local $iItemsTxt = _MemoryRead($g_hD2Common + 0x9FB94, $g_ahD2Handle)
 	local $pItemsTxt = _MemoryRead($g_hD2Common + 0x9FB98, $g_ahD2Handle)
 
-	local $pBaseAddr, $iNameID, $sName, $asMatch, $sTier, $iTierFlag
+	local $pBaseAddr, $iNameID, $sName, $asMatch, $sTier, $iTierFlag, $bCanHaveSockets
 
-	redim $g_avNotifyCache[$iItemsTxt][3]
+	redim $g_avNotifyCache[$iItemsTxt][4]
 
 	for $iClass = 0 to $iItemsTxt - 1
 		$pBaseAddr = $pItemsTxt + 0x1A8 * $iClass
@@ -64,8 +64,9 @@ func NotifierCache()
 		$sName = StringReplace($sName, @LF, "|")
 		$sName = StringRegExpReplace($sName, "ÿc.", "")
 		$sTier = "0"
+		$bCanHaveSockets = _MemoryRead($pBaseAddr + 0x84, $g_ahD2Handle) <> 0
 
-		if (_MemoryRead($pBaseAddr + 0x84, $g_ahD2Handle)) then ; Weapon / Armor
+		if ($bCanHaveSockets) then ; Weapon / Armor
 			$asMatch = StringRegExp($sName, "[1-4]|\Q(Sacred)\E|\Q(Angelic)\E|\Q(Mastercrafted)\E", $STR_REGEXPARRAYGLOBALMATCH)
 			if (not @error) and IsArray($asMatch) then
 				if (Ubound($asMatch) > 1 or $asMatch[0] == "") then
@@ -95,6 +96,7 @@ func NotifierCache()
 		$g_avNotifyCache[$iClass][0] = $sName
 		$g_avNotifyCache[$iClass][1] = $iTierFlag
 		$g_avNotifyCache[$iClass][2] = StringRegExpReplace($sName, ".+\|", "")
+		$g_avNotifyCache[$iClass][3] = $bCanHaveSockets
 	next
 endfunc
 
@@ -361,6 +363,7 @@ func NotifierMain()
 						$oItemFlags.add('$sMatchingLine', $sMatchingLine)
 						$oItemFlags.add('$bIsEthereal', $bIsEthereal)
 						$oItemFlags.add('$bNotEquipment', $bNotEquipment)
+						$oItemFlags.add('$bCanHaveSockets', $g_avNotifyCache[$iClass][3])
 						$oItemFlags.add('$iQuality', $iQuality)
 						$oItemFlags.add('$pCurrentUnit', $pCurrentUnit)
 						$oItemFlags.add('$pUnitData', $pUnitData)
@@ -427,6 +430,7 @@ func FormatNotifications(byref $asPreNotificationsPool)
 		local $bIsEthereal = $oFlags.item('$bIsEthereal')
 		local $iFlagsColour = $oFlags.item('$iFlagsColour')
 		local $bNotEquipment = $oFlags.item('$bNotEquipment')
+		local $bCanHaveSockets = $oFlags.item('$bCanHaveSockets')
 		local $iQuality = $oFlags.item('$iQuality')
 		local $bShowItemName = $oFlags.item('$bShowItemName')
 		local $iLvl = $oFlags.item('$iLvl')
@@ -449,9 +453,10 @@ func FormatNotifications(byref $asPreNotificationsPool)
         ; to display as notifications per line
         if (UBound($asStatGroups) or $bDisplayItemStats) then
 			local $sGetItemStats = GetItemStats($pCurrentUnit)
-			local $iSocketCount = GetUnitStat($oFlags.item('$pCurrentUnit'), 0xC2)
-			if $iQuality > 0 and $iQuality < 5 then
-				$sGetItemStats = "Socketed (" & $iSocketCount & ")" & @CRLF & $sGetItemStats
+			; Game formatter often omits sockets; keep the line for {socketed} filters and the stat flag.
+			; Skip classes that can never socket (rings, amulets, gems, consumables).
+			if $bCanHaveSockets and StringInStr($sGetItemStats, "Socketed") == 0 then
+				$sGetItemStats = "Socketed (" & GetUnitStat($pCurrentUnit, 0xC2) & ")" & @CRLF & $sGetItemStats
 			endif
 			$asItemStats = HighlightStats($sGetItemStats, $asStatGroups, $bIsMatchByStats)
             $oFlags.add('$bIsMatchByStats', $bIsMatchByStats)
@@ -877,7 +882,7 @@ func OnClick_NotifyHelp()
 		'', _
 		'Example 2:', _
         'sacred {socketed \([0,6]\)}', _
-        'This would match ever sacred item with 0 or 6 Sockets', _
+        'This would match every sacred item with 0 or 6 sockets', _
 		'', _
         'Example 3:', _
         '"Amulet$" normal rare magic', _
