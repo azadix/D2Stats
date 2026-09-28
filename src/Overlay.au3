@@ -1,4 +1,5 @@
 #include-once
+#include <WinAPIGdi.au3>
 
 #Region Overlay globals
 global $g_hScriptStartTime = TimerInit()
@@ -7,10 +8,132 @@ global $g_aMessages[0][4] ; Stores [GUI handle, GUI bg handle, expire time, heig
 global $g_bCleanupRunning = False
 global $g_iNextYPos
 global $g_NotifierColorArray[12] = [0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0xF0CD8C, 0x9D9D9D, 0x000000, 0xFF00FF, 0xFFBF00, 0xFFFF00, 0x008000, 0x9D00FF]
-global $g_aOverlayHistory[0][2]  ; [text, color] - stores last overlay messages (max visible lines)
+global $g_aOverlayHistory[0][3]  ; [text, color, gapAfter] - last overlay messages (max visible lines)
 global $g_bOverlayHistoryMode = False  ; Flag to indicate we're in history display mode
 global $g_bOverlayHistoryGroup = False  ; Group consecutive PrintString calls (one item notification)
 global $g_iOverlayHistoryGroupLen = 0  ; Lines already stored in the current group
+global $g_asOverlayMonoFonts[0]
+global $g_sOverlayMetricsKey = ""
+global $g_iOverlayCharWidth = 1
+global $g_iOverlayRowHeight = 20
+#EndRegion
+
+#Region Overlay fonts
+Func OverlayGetMonospaceFonts()
+	If UBound($g_asOverlayMonoFonts) > 0 Then Return $g_asOverlayMonoFonts
+
+	Local $aNames[0]
+	Local $aEnum = _WinAPI_EnumFontFamilies(0, "", $DEFAULT_CHARSET, $TRUETYPE_FONTTYPE)
+	If Not @error And IsArray($aEnum) Then
+		Local $hDC = _WinAPI_CreateCompatibleDC(0)
+		If $hDC Then
+			For $i = 1 To $aEnum[0][0]
+				Local $sFace = $aEnum[$i][0]
+				If $sFace = "" Or StringLeft($sFace, 1) = "@" Then ContinueLoop
+				If _ArraySearch($aNames, $sFace) >= 0 Then ContinueLoop
+				If OverlayIsMonospaceFace($hDC, $sFace) Then
+					ReDim $aNames[UBound($aNames) + 1]
+					$aNames[UBound($aNames) - 1] = $sFace
+				EndIf
+			Next
+			_WinAPI_DeleteDC($hDC)
+		EndIf
+	EndIf
+
+	If UBound($aNames) = 0 Then
+		ReDim $aNames[1]
+		$aNames[0] = "Courier New"
+	EndIf
+	_ArraySort($aNames)
+	$g_asOverlayMonoFonts = $aNames
+	Return $g_asOverlayMonoFonts
+EndFunc
+
+Func OverlayIsMonospaceFace($hDC, $sFace)
+	Local $hFont = OverlayCreateGdiFont($hDC, $sFace, 12)
+	If Not $hFont Then Return False
+
+	Local $hPrev = _WinAPI_SelectObject($hDC, $hFont)
+	Local $tTM = _WinAPI_GetTextMetrics($hDC)
+	Local $iErr = @error
+	_WinAPI_SelectObject($hDC, $hPrev)
+	_WinAPI_DeleteObject($hFont)
+	If $iErr Or Not IsDllStruct($tTM) Then Return False
+
+	; TMPF_FIXED_PITCH is inverted: bit set means proportional.
+	Return BitAND(DllStructGetData($tTM, "tmPitchAndFamily"), $TMPF_FIXED_PITCH) = 0
+EndFunc
+
+Func OverlayCreateGdiFont($hDC, $sFace, $iPointSize)
+	If $iPointSize < 1 Then $iPointSize = 1
+	Local $iLogPixels = _WinAPI_GetDeviceCaps($hDC, $LOGPIXELSY)
+	If $iLogPixels < 1 Then $iLogPixels = 96
+	Local $iHeight = -Round($iPointSize * $iLogPixels / 72)
+	If $iHeight = 0 Then $iHeight = -12
+	Local $hFont = _WinAPI_CreateFont($iHeight, 0, 0, 0, $FW_NORMAL, False, False, False, $DEFAULT_CHARSET, $OUT_DEFAULT_PRECIS, $CLIP_DEFAULT_PRECIS, $NONANTIALIASED_QUALITY, 0, $sFace)
+	If @error Or Not $hFont Then Return 0
+	Return $hFont
+EndFunc
+
+Func OverlayFontInList($aFonts, $sFace)
+	If $sFace = "" Or Not IsArray($aFonts) Then Return False
+	Return _ArraySearch($aFonts, $sFace) >= 0
+EndFunc
+
+Func OverlayFont()
+	Local $aFonts = OverlayGetMonospaceFonts()
+	Local $sSaved = _GUI_Option("overlay-font")
+	If OverlayFontInList($aFonts, $sSaved) Then Return $sSaved
+	If OverlayFontInList($aFonts, "Courier New") Then Return "Courier New"
+	Return $aFonts[0]
+EndFunc
+
+Func OverlayGetMetrics()
+	Local $sFont = OverlayFont()
+	Local $iSize = OverlayInt("overlay-fontsize")
+	If $iSize < 1 Then $iSize = 1
+	Local $sKey = $sFont & "|" & $iSize
+	If $sKey == $g_sOverlayMetricsKey Then Return
+
+	Local $iCharW = 1
+	Local $iRowH = Floor($iSize * 1.65)
+	If $iRowH < 1 Then $iRowH = 1
+
+	Local $hDC = _WinAPI_CreateCompatibleDC(0)
+	If $hDC Then
+		Local $hFont = OverlayCreateGdiFont($hDC, $sFont, $iSize)
+		If $hFont Then
+			Local $hPrev = _WinAPI_SelectObject($hDC, $hFont)
+			Local $tSize = _WinAPI_GetTextExtentPoint32($hDC, "M")
+			If Not @error And IsDllStruct($tSize) Then
+				$iCharW = DllStructGetData($tSize, "X")
+				If $iCharW < 1 Then $iCharW = 1
+			EndIf
+			Local $tTM = _WinAPI_GetTextMetrics($hDC)
+			If Not @error And IsDllStruct($tTM) Then
+				$iRowH = DllStructGetData($tTM, "tmHeight") + DllStructGetData($tTM, "tmExternalLeading")
+				If $iRowH < 1 Then $iRowH = 1
+			EndIf
+			_WinAPI_SelectObject($hDC, $hPrev)
+			_WinAPI_DeleteObject($hFont)
+		EndIf
+		_WinAPI_DeleteDC($hDC)
+	EndIf
+
+	$g_iOverlayCharWidth = $iCharW
+	$g_iOverlayRowHeight = $iRowH
+	$g_sOverlayMetricsKey = $sKey
+EndFunc
+
+Func OverlayCharWidth()
+	OverlayGetMetrics()
+	Return $g_iOverlayCharWidth
+EndFunc
+
+Func OverlayRowHeight()
+	OverlayGetMetrics()
+	Return $g_iOverlayRowHeight
+EndFunc
 #EndRegion
 
 #Region Overlay
@@ -104,6 +227,7 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     EndIf
 
     Local $iTextColor = $g_NotifierColorArray[$iColor]
+    Local $sOverlayFont = OverlayFont()
     Local $aOverlayPos = WinGetPos($g_hOverlayGUI)
     Local $iTextWidth = $aOverlayPos[2]
     
@@ -112,9 +236,10 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 
     ; Split text into lines
     Local $aSplitText = _SplitTextToWidth($sText, $iTextWidth)
-	; Calculate row height based on font size
-	local $iRowHeight = Floor(OverlayInt("overlay-fontsize") * 1.65)
+	Local $iRowHeight = OverlayRowHeight()
 	
+	Local $iNewLines = 0
+	Local $iHistoryGapIndex = 0
 	; Store in overlay history (keep max visible lines) - but not when in history mode
 	; Do this once per message, not per line
 	If Not $g_bOverlayHistoryMode Then
@@ -123,7 +248,7 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 		Local $iHistorySize = UBound($g_aOverlayHistory)
 
 		; Count only lines that will actually be stored
-		Local $iNewLines = 0
+		$iNewLines = 0
 		For $i = 0 To UBound($aSplitText) - 1
 			If $aSplitText[$i] <> "" Then $iNewLines += 1
 		Next
@@ -133,12 +258,13 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 			Local $iInsert = 0
 			If $g_bOverlayHistoryGroup Then $iInsert = $g_iOverlayHistoryGroupLen
 
-			ReDim $g_aOverlayHistory[$iHistorySize + $iNewLines][2]
+			ReDim $g_aOverlayHistory[$iHistorySize + $iNewLines][3]
 
 			; Shift existing messages down from the insert point
 			For $j = $iHistorySize + $iNewLines - 1 To $iInsert + $iNewLines Step -1
 				$g_aOverlayHistory[$j][0] = $g_aOverlayHistory[$j - $iNewLines][0]
 				$g_aOverlayHistory[$j][1] = $g_aOverlayHistory[$j - $iNewLines][1]
+				$g_aOverlayHistory[$j][2] = $g_aOverlayHistory[$j - $iNewLines][2]
 			Next
 
 			; Add new message lines in original order
@@ -149,15 +275,17 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 
 				$g_aOverlayHistory[$iInsert + $iStored][0] = $sLine
 				$g_aOverlayHistory[$iInsert + $iStored][1] = $iColor
+				$g_aOverlayHistory[$iInsert + $iStored][2] = 0
 				$iStored += 1
 			Next
 
 			If $g_bOverlayHistoryGroup Then $g_iOverlayHistoryGroupLen += $iNewLines
+			$iHistoryGapIndex = $iInsert + $iNewLines - 1
 		EndIf
 
 		; Trim to max lines if we exceed the limit
 		If UBound($g_aOverlayHistory) > $iMaxLines Then
-			ReDim $g_aOverlayHistory[$iMaxLines][2]
+			ReDim $g_aOverlayHistory[$iMaxLines][3]
 			If $g_bOverlayHistoryGroup And $g_iOverlayHistoryGroupLen > $iMaxLines Then
 				$g_iOverlayHistoryGroupLen = $iMaxLines
 			EndIf
@@ -165,24 +293,24 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 	EndIf
 	
     ; Create labels for each line
+    Local $iMessagesBefore = UBound($g_aMessages)
     For $i = 0 To UBound($aSplitText) - 1
         Local $sLine = $aSplitText[$i]
         If $sLine = "" Then ContinueLoop ; Skip empty lines
 		
-        ; Background (black outline) for contrast
         Local $idLabelBg = 0
+        Local $iLineWidth = $iTextWidth
+        Local $iLabelBk = $GUI_BKCOLOR_TRANSPARENT
         If _GUI_Option("overlay-contrast") Then
-            $idLabelBg = GUICtrlCreateLabel(StringRegExpReplace($sLine & " ", "(?s).", "█"), 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
-            GUICtrlSetColor($idLabelBg, 0x0A0A0A)
-            GUICtrlSetBkColor($idLabelBg, $GUI_BKCOLOR_TRANSPARENT)
-            GUICtrlSetFont($idLabelBg, OverlayInt("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+            $iLineWidth = OverlayCharWidth() * (StringLen($sLine) + 1)
+            If $iLineWidth < 1 Then $iLineWidth = OverlayCharWidth()
+            $iLabelBk = 0x0A0A0A
         EndIf
 
-        ; Foreground (colored text)
-        Local $idLabel = GUICtrlCreateLabel($sLine, 0, $g_iNextYPos, $iTextWidth, $iRowHeight)
+        Local $idLabel = GUICtrlCreateLabel($sLine, 0, $g_iNextYPos, $iLineWidth, $iRowHeight)
         GUICtrlSetColor($idLabel, $iTextColor)
-        GUICtrlSetBkColor($idLabel, $GUI_BKCOLOR_TRANSPARENT)
-        GUICtrlSetFont($idLabel, OverlayInt("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, "Courier New", $ANTIALIASED_QUALITY)
+        GUICtrlSetBkColor($idLabel, $iLabelBk)
+        GUICtrlSetFont($idLabel, OverlayInt("overlay-fontsize"), $FW_NORMAL, $GUI_FONTNORMAL, $sOverlayFont, $NONANTIALIASED_QUALITY)
 
 		Local $iUBound = UBound($g_aMessages)
         ReDim $g_aMessages[$iUBound + 1][4]
@@ -195,6 +323,8 @@ Func PrintString($sText, $iColor = $ePrintWhite)
         $g_iNextYPos += $iRowHeight
     Next
 
+    If UBound($g_aMessages) > $iMessagesBefore And Not $g_bOverlayHistoryGroup And Not $g_bOverlayHistoryMode Then OverlayAddItemGap($iHistoryGapIndex)
+
     ; Start cleanup timer if needed
     If Not $g_bCleanupRunning And IsArray($g_aMessages) And UBound($g_aMessages) > 0 Then
         $g_bCleanupRunning = True
@@ -202,11 +332,22 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     EndIf
 EndFunc
 
+Func OverlayAddItemGap($iHistoryIndex = -1)
+    Local Const $iGap = 2
+    If $g_iNextYPos <= 0 Then Return
+    $g_iNextYPos += $iGap
+    Local $iLast = UBound($g_aMessages) - 1
+    If $iLast >= 0 Then $g_aMessages[$iLast][3] += $iGap
+
+    If $g_bOverlayHistoryMode Then Return
+    If $iHistoryIndex < 0 Then $iHistoryIndex = 0
+    If $iHistoryIndex < UBound($g_aOverlayHistory) Then $g_aOverlayHistory[$iHistoryIndex][2] = 1
+EndFunc
+
 Func _SplitTextToWidth($sText, $iMaxWidth)
     Local $aLines[0]
     
-    ; Get average char width (monospace)
-    Local $iCharWidth = Floor((OverlayInt("overlay-fontsize") * _GetDPI()[2]) * 0.85)
+    Local $iCharWidth = OverlayCharWidth()
     If $iCharWidth < 1 Then $iCharWidth = 1
     Local $iMaxChars = Floor($iMaxWidth / $iCharWidth)
     If $iMaxChars < 1 Then $iMaxChars = 1

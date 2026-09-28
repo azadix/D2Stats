@@ -559,6 +559,7 @@ func DisplayNotification(ByRef $asNotificationsPool)
     endif
 
     $g_bOverlayHistoryGroup = False
+    If $g_iOverlayHistoryGroupLen > 0 Then OverlayAddItemGap($g_iOverlayHistoryGroupLen - 1)
     $g_iOverlayHistoryGroupLen = 0
 endfunc
 

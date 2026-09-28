@@ -90,7 +90,7 @@ func DefineGlobals()
 	global const $g_iD2InjectStringBytes = 0x8000
 	global const $g_iD2InjectStringWChars = $g_iD2InjectStringBytes / 2
 
-	global const $g_iGUIOptionsGeneral = 15
+	global const $g_iGUIOptionsGeneral = 16
 	global const $g_iGUIOptionsHotkey = 4
 
 	global $g_avGUIOptionList[][5] = [ _
@@ -105,6 +105,7 @@ func DefineGlobals()
 		["overlay-x", 10, "int", "Overlay X offset", "OnChange_OverlaySettings"], _
 		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings"], _
 		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings"], _
+		["overlay-font", "Courier New", "str", "Overlay font", "OnChange_OverlayFont"], _
 		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings"], _
 		["overlay-contrast", 1, "cb", "Draw black background behind overlay text"], _
 		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule"], _
@@ -317,6 +318,12 @@ func _GUI_NewOption($iLine, $sOption, $sText, $sFunc = "")
             $aControls[0] = GUICtrlCreateInput(Int(_GUI_Option($sOption)), 10, $iY, 50, 22)
 			GUICtrlSetOnEvent($aControls[0], $sFunc)
             $aControls[1] = GUICtrlCreateLabel($sText, 70, $iY + 4, Default, 22)
+		case "str"
+			$aControls[0] = GUICtrlCreateCombo("", 10, $iY, 200, 22, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
+			GUICtrlSetData($aControls[0], "|" & _ArrayToString(OverlayGetMonospaceFonts(), "|"))
+			GUICtrlSetData($aControls[0], OverlayFont())
+			GUICtrlSetOnEvent($aControls[0], $sFunc)
+			$aControls[1] = GUICtrlCreateLabel($sText, 218, $iY + 4, Default, 22)
 		case else
 			_Log("_GUI_NewOption", "Invalid option type '" & $sOptionType & "'")
 			return $aControls
@@ -347,12 +354,19 @@ Func OnChange_OverlaySettings()
         Local $iValue = ClampOverlayInt($sOptionKey, GUICtrlRead($idCtrl))
         If String($iValue) <> GUICtrlRead($idCtrl) Then GUICtrlSetData($idCtrl, $iValue)
         _GUI_Option($sOptionKey, $iValue)
+        If $sOptionKey = "overlay-fontsize" Then $g_sOverlayMetricsKey = ""
 
         If StringInStr($sOptionKey, "overlay-") And $g_hOverlayGUI Then
             ; Reposition only. Do not GUIDelete — that drops live overlay messages.
             UpdateOverlayPosition()
         EndIf
     EndIf
+EndFunc
+
+Func OnChange_OverlayFont()
+	Local $sFont = GUICtrlRead(@GUI_CtrlId)
+	If $sFont <> "" Then _GUI_Option("overlay-font", $sFont)
+	$g_sOverlayMetricsKey = ""
 EndFunc
 
 func ClampOverlayInt($sOption, $vValue)
@@ -712,6 +726,8 @@ func SaveGUISettings()
 				$vValue = StringToBinary($vValue)
 			case "int"
 				$vValue = Int($vValue)
+			case "str"
+				$vValue = String($vValue)
 		endswitch
 		
 		$sWrite &= StringFormat("%s=%s%s", $g_avGUIOptionList[$i][0], $vValue, @LF)
@@ -726,8 +742,15 @@ func LoadGUISettings()
 		for $i = 1 to $asIniGeneral[0][0]
 			if (_GUI_OptionExists($asIniGeneral[$i][0])) then
 				$vValue = $asIniGeneral[$i][1]
-				$vValue = _GUI_OptionType($asIniGeneral[$i][0]) == "tx" ? BinaryToString($vValue) : Int($vValue)
-				if (StringInStr($asIniGeneral[$i][0], "overlay-") == 1) then $vValue = ClampOverlayInt($asIniGeneral[$i][0], $vValue)
+				local $sType = _GUI_OptionType($asIniGeneral[$i][0])
+				if ($sType == "tx") then
+					$vValue = BinaryToString($vValue)
+				elseif ($sType == "str") then
+					$vValue = String($vValue)
+				else
+					$vValue = Int($vValue)
+				endif
+				if (StringInStr($asIniGeneral[$i][0], "overlay-") == 1 and $sType <> "str") then $vValue = ClampOverlayInt($asIniGeneral[$i][0], $vValue)
 				_GUI_Option($asIniGeneral[$i][0], $vValue)
 			endif
 		next

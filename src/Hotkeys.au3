@@ -122,12 +122,14 @@ func HotKey_ShowNotifierLog()
 		
 		; Show header first
 		PrintString("--- Overlay History (Press again to hide) ---", $ePrintYellow)
+		OverlayAddItemGap()
 		
 		; Then show overlay history (newest first)
 		local $iHistorySize = UBound($g_aOverlayHistory)
 		if ($iHistorySize > 0) then
 			for $i = 0 to $iHistorySize - 1
 				PrintString($g_aOverlayHistory[$i][0], $g_aOverlayHistory[$i][1])
+				if ($g_aOverlayHistory[$i][2]) then OverlayAddItemGap()
 			next
 		else
 			PrintString("No overlay history available.", $ePrintGrey)

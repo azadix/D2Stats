@@ -21,10 +21,13 @@ This tool attaches itself to the `Game.exe` process and modifies memory to funct
 Mod version 2.10 introduced in-game loot filtering system that disabled filtering using D2Stats. Current version only allows for notifying when certain item drops. All filters that still have `hide` and `show` keywords need to have them removed for notifier to function properly
 
 ### "Why does the notifier overlay look so ugly. Can i modify it eg change font style or background transparency/color?"
-Not really. The current implementation is very unstable so i've decided on monospaced font (Courier New) that is guaranteed to be on every machine. The current version only allows for changing those properties:
+The overlay is still a layered window with label controls, so only a few properties are exposed:
+  - Font (Options combo of **monospace** fonts installed on this machine)
   - Font size
   - X and Y offset (in pixels) from top-left edge of the window
   - Notification timeout duration (in milisecond)
+
+The font list comes from Windows/GDI, so Wine/Linux users only see fonts available in that Wine prefix. Install `corefonts` (`winetricks corefonts`) or copy `.ttf` files into Wine's `Fonts` folder if the combo is empty or missing Courier New / Consolas.
 
 If you really want to change some properties that were not exposed on the application UI you'll have to edit the overlay code (`src/Overlay.au3`) and recompile it using provided script (`Compile.bat`)
 
