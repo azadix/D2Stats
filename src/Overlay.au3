@@ -231,8 +231,7 @@ Func PrintString($sText, $iColor = $ePrintWhite)
     Local $aOverlayPos = WinGetPos($g_hOverlayGUI)
     Local $iTextWidth = $aOverlayPos[2]
     
-    ; Remove Diablo II color codes (ÿcX)
-    $sText = StringRegExpReplace($sText, "ÿc.", "")
+    $sText = StripD2ColorCodes($sText)
 
     ; Split text into lines
     Local $aSplitText = _SplitTextToWidth($sText, $iTextWidth)

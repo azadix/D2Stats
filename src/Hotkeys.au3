@@ -68,7 +68,7 @@ func HotKey_CopyItem($TEST = False)
 		return
 	endif
 
-	$sOutput = StringRegExpReplace($sOutput, "ÿc.", "")
+	$sOutput = StripD2ColorCodes($sOutput)
 	local $asLines = StringSplit($sOutput, @LF)
 
 	if (_GUI_Option("copy-name")) then

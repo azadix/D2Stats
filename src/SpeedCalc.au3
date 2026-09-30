@@ -605,7 +605,7 @@ func SpeedCalc_ItemName($iFileIndex, $iNameID)
 	local $pName = RemoteThread($g_pD2InjectGetString, $iNameID)
 	if (@error or not $pName) then return ""
 	local $sName = _MemoryRead($pName, $g_ahD2Handle, "wchar[100]")
-	$sName = StringRegExpReplace($sName, "ÿc.", "")
+	$sName = StripD2ColorCodes($sName)
 	local $as = StringSplit($sName, @LF)
 	local $i, $sLast = ""
 	for $i = 1 to $as[0]

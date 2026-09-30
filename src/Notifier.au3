@@ -62,7 +62,7 @@ func NotifierCache()
 		$sName = _MemoryRead($sName, $g_ahD2Handle, "wchar[100]")
 
 		$sName = StringReplace($sName, @LF, "|")
-		$sName = StringRegExpReplace($sName, "ÿc.", "")
+		$sName = StripD2ColorCodes($sName)
 		$sTier = "0"
 		$bCanHaveSockets = _MemoryRead($pBaseAddr + 0x84, $g_ahD2Handle) <> 0
 
@@ -441,12 +441,13 @@ func FormatNotifications(byref $asPreNotificationsPool)
 		local $asItemName = UBound($asItem) == 3 ? $asItem[2] : ""
         local $asItemType = (IsArray($asItem) and UBound($asItem) >= 2) ? $asItem[1] : ""
         local $asItemStats = ""
-        local $iItemColor = $ePrintWhite
-		if ($bNotEquipment) then
-			$iItemColor = $ePrintOrange
-		elseif ($iQuality >= 0 and $iQuality < UBound($g_iQualityColor)) then
-			$iItemColor = $g_iQualityColor[$iQuality]
+		local $iQualityColor = $ePrintWhite
+		if ($iQuality >= 0 and $iQuality < UBound($g_iQualityColor)) then
+			$iQualityColor = $g_iQualityColor[$iQuality]
 		endif
+		; No notifier color: use the in-game ÿc code (name, then type). Consumables
+		; and runes are both "not equipment" but white vs orange in game.
+		local $iItemColor = GetD2TextPrintColor($asItemName, GetD2TextPrintColor($asItemType, $iQualityColor))
         local $sPreName = ""
 		
         ; collect a reversed 2d array of stats and color
@@ -489,10 +490,8 @@ func FormatNotifications(byref $asPreNotificationsPool)
             endif
         endif
 
-        if ($iFlagsColour or $bNotEquipment) then
-            $asItemName = StringRegExpReplace($asItemName, "ÿc.", "")
-            $asItemType = StringRegExpReplace($asItemType, "ÿc.", "")
-        endif
+		$asItemName = StripD2ColorCodes($asItemName)
+		$asItemType = StripD2ColorCodes($asItemType)
 
 		; compiling texts for item notifications
 		if ($bNotEquipment) then
@@ -672,37 +671,8 @@ func NarrowNotificationsPool($asNotificationsPool)
 	return $aNotifications
 endfunc
 
-; Map Diablo II ÿcX color codes to overlay print colors. Default remains blue.
 func GetD2StatPrintColor($sStat)
-	local $asCode = StringRegExp($sStat, "ÿc(.)", $STR_REGEXPARRAYMATCH)
-	if (@error) then return $ePrintBlue
-
-	select
-		case $asCode[0] == "0"
-			return $ePrintWhite
-		case $asCode[0] == "1"
-			return $ePrintRed
-		case $asCode[0] == "2"
-			return $ePrintLime
-		case $asCode[0] == "3"
-			return $ePrintBlue
-		case $asCode[0] == "4" or $asCode[0] == "7"
-			return $ePrintGold
-		case $asCode[0] == "5"
-			return $ePrintGrey
-		case $asCode[0] == "6"
-			return $ePrintBlack
-		case $asCode[0] == "8"
-			return $ePrintOrange
-		case $asCode[0] == "9"
-			return $ePrintYellow
-		case $asCode[0] == ":"
-			return $ePrintGreen
-		case $asCode[0] == ";"
-			return $ePrintPurple
-		case else
-			return $ePrintBlue
-	endselect
+	return GetD2TextPrintColor($sStat, $ePrintBlue)
 endfunc
 
 func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
@@ -713,7 +683,7 @@ func HighlightStats($sGetItemStats, $asStatGroups, byref $bIsMatchByStats)
 
     for $k = 1 to $asStats[0]
         local $sStat = $asStats[$k]
-		local $sStatText = StringRegExpReplace($sStat, "ÿc.", "")
+		local $sStatText = StripD2ColorCodes($sStat)
 		local $iStatColor = GetD2StatPrintColor($sStat)
 		local $iRow = $asStats[0] - $k
 		local $bKeywordMatched = False

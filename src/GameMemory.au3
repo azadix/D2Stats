@@ -96,6 +96,67 @@ func GetItemName($pUnit)
 	return StringSplit(GetOutputString(256), @LF)
 endfunc
 
+; D2 color codes are wchar U+00FF, "c", then a code (0-9, :, ;).
+func StripD2ColorCodes($sText)
+	if (not IsString($sText) or $sText == "") then return ""
+
+	local $sOut = ""
+	local $i = 1
+	local $iLen = StringLen($sText)
+	while $i <= $iLen
+		if ($i + 2 <= $iLen and AscW(StringMid($sText, $i, 1)) == 0xFF and StringMid($sText, $i + 1, 1) == "c") then
+			$i += 3
+			continueloop
+		endif
+		$sOut &= StringMid($sText, $i, 1)
+		$i += 1
+	wend
+	return $sOut
+endfunc
+
+func GetD2TextPrintColor($sText, $iDefault = $ePrintWhite)
+	if (not IsString($sText) or $sText == "") then return $iDefault
+
+	local $sCode = ""
+	local $i = 1
+	local $iLen = StringLen($sText)
+	while $i <= $iLen - 2
+		if (AscW(StringMid($sText, $i, 1)) == 0xFF and StringMid($sText, $i + 1, 1) == "c") then
+			$sCode = StringMid($sText, $i + 2, 1)
+			exitloop
+		endif
+		$i += 1
+	wend
+	if ($sCode == "") then return $iDefault
+
+	select
+		case $sCode == "0"
+			return $ePrintWhite
+		case $sCode == "1"
+			return $ePrintRed
+		case $sCode == "2"
+			return $ePrintLime
+		case $sCode == "3"
+			return $ePrintBlue
+		case $sCode == "4" or $sCode == "7"
+			return $ePrintGold
+		case $sCode == "5"
+			return $ePrintGrey
+		case $sCode == "6"
+			return $ePrintBlack
+		case $sCode == "8"
+			return $ePrintOrange
+		case $sCode == "9"
+			return $ePrintYellow
+		case $sCode == ":"
+			return $ePrintGreen
+		case $sCode == ";"
+			return $ePrintPurple
+		case else
+			return $iDefault
+	endselect
+endfunc
+
 ; D2Client GetItemDesc prints dummy unique aura/oskill/proc skills whose name
 ; string is missing as "FLYING POLAR BUFFALO ERROR". The in-game unique tooltip
 ; hides those lines; strip them so overlay stats match.
