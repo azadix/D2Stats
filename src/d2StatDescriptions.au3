@@ -498,7 +498,7 @@ global $g_d2StatNames[][5] = [ _
 		[493, "", True, "Slows Ranged Attacker +#%", True], _
 		[494, "", True, "", True], _
 		[495, "", True, "", True], _
-		[496, "", True, "'Cube with Oil of Craft to Reveal' amount", True], _
+		[496, "", True, "", True], _
 		[497, "", True, "Corrupted items amount", True], _
 		[498, "", True, "", True], _
 		[499, "", True, "", True], _
