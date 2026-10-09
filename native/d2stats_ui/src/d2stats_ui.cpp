@@ -218,6 +218,7 @@ struct App {
 	ScTable scTables[4];
 
 	std::vector<OverlayLine> overlayLines;
+	int theme = 0; // 0 Cherry, 1 Dark, 2 Light
 
 	void PushEvent(int type, int i0 = 0, int i1 = 0, int i2 = 0, const char* key = nullptr, const char* text = nullptr) {
 		D2UiEvent e{};
@@ -242,6 +243,111 @@ struct App {
 };
 
 App g;
+
+enum UiTheme { kThemeCherry = 0, kThemeDark = 1, kThemeLight = 2 };
+
+const char* ThemeNames[] = {"Cherry", "Dark", "Light"};
+
+std::wstring UiIniPath() {
+	wchar_t path[MAX_PATH]{};
+	HMODULE mod = nullptr;
+	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		reinterpret_cast<LPCWSTR>(&UiIniPath), &mod);
+	GetModuleFileNameW(mod, path, MAX_PATH);
+	std::wstring p(path);
+	size_t slash = p.find_last_of(L"\\/");
+	if (slash != std::wstring::npos)
+		p.resize(slash + 1);
+	p += L"D2Stats.exe.ini";
+	return p;
+}
+
+void RemapBlueAccentsToCherry() {
+	ImGuiStyle& style = ImGui::GetStyle();
+	for (int i = 0; i < ImGuiCol_COUNT; ++i) {
+		ImVec4& c = style.Colors[i];
+		if (c.z > c.x + 0.12f && c.z > c.y * 0.85f) {
+			c = ImVec4(c.z, c.x * 0.42f + 0.04f, c.x * 0.32f + 0.06f, c.w);
+		}
+	}
+}
+
+void ApplyThemeToCurrentContext() {
+	switch (g.theme) {
+	case kThemeLight:
+		ImGui::StyleColorsLight();
+		break;
+	case kThemeDark:
+		ImGui::StyleColorsDark();
+		break;
+	default:
+		ImGui::StyleColorsDark();
+		RemapBlueAccentsToCherry();
+		break;
+	}
+	ImGuiStyle& uiStyle = ImGui::GetStyle();
+	uiStyle.FramePadding = ImVec2(5, 2);
+	uiStyle.ItemSpacing = ImVec2(6, 2);
+	uiStyle.ItemInnerSpacing = ImVec2(4, 2);
+	uiStyle.CellPadding = ImVec2(4, 1);
+	uiStyle.ScrollbarSize = 14.0f;
+	uiStyle.TabRounding = 0.0f;
+	uiStyle.FrameBorderSize = 1.0f;
+	ImVec4 accent = uiStyle.Colors[ImGuiCol_CheckMark];
+	if (g.theme == kThemeLight) {
+		uiStyle.Colors[ImGuiCol_Border] = ImVec4(0.45f, 0.45f, 0.50f, 1.0f);
+	} else {
+		auto DarkFrame = [&](float t, float a) { return ImVec4(accent.x * t, accent.y * t, accent.z * t, a); };
+		uiStyle.Colors[ImGuiCol_FrameBg] = DarkFrame(0.12f, 1.0f);
+		uiStyle.Colors[ImGuiCol_FrameBgHovered] = DarkFrame(0.20f, 1.0f);
+		uiStyle.Colors[ImGuiCol_FrameBgActive] = DarkFrame(0.28f, 1.0f);
+		uiStyle.Colors[ImGuiCol_Border] = ImVec4(accent.x * 0.55f, accent.y * 0.55f, accent.z * 0.55f, 1.0f);
+	}
+}
+
+void ApplyThemeAllContexts() {
+	ImGuiContext* prev = ImGui::GetCurrentContext();
+	if (g.mainCtx) {
+		ImGui::SetCurrentContext(g.mainCtx);
+		ApplyThemeToCurrentContext();
+	}
+	if (g.overlayCtx) {
+		ImGui::SetCurrentContext(g.overlayCtx);
+		ApplyThemeToCurrentContext();
+	}
+	if (g.diffCtx) {
+		ImGui::SetCurrentContext(g.diffCtx);
+		ApplyThemeToCurrentContext();
+	}
+	if (prev)
+		ImGui::SetCurrentContext(prev);
+}
+
+void LoadTheme() {
+	wchar_t buf[32]{};
+	GetPrivateProfileStringW(L"UI", L"Theme", L"Cherry", buf, 32, UiIniPath().c_str());
+	g.theme = kThemeCherry;
+	for (int i = 0; i < IM_ARRAYSIZE(ThemeNames); ++i) {
+		if (_wcsicmp(buf, Utf8ToWide(ThemeNames[i]).c_str()) == 0) {
+			g.theme = i;
+			break;
+		}
+	}
+}
+
+void SaveTheme() {
+	WritePrivateProfileStringW(L"UI", L"Theme", Utf8ToWide(ThemeNames[g.theme]).c_str(), UiIniPath().c_str());
+}
+
+void DrawThemeSwitcher() {
+	int t = g.theme;
+	ImGui::SetNextItemWidth(160);
+	if (ImGui::Combo("Theme", &t, ThemeNames, IM_ARRAYSIZE(ThemeNames))) {
+		g.theme = t;
+		ApplyThemeAllContexts();
+		SaveTheme();
+	}
+}
 
 void CreateMainRenderTarget() {
 	ID3D11Texture2D* back = nullptr;
@@ -776,6 +882,10 @@ void DrawStatsTab(int tab) {
 }
 
 void DrawOptions(int group) {
+	if (group == 0) {
+		DrawThemeSwitcher();
+		ImGui::Separator();
+	}
 	for (size_t i = 0; i < g.options.size(); ++i) {
 		auto& o = g.options[i];
 		if (o.group != group)
@@ -789,7 +899,7 @@ void DrawOptions(int group) {
 			}
 		} else if (o.type == "int") {
 			int v = o.intValue;
-			ImGui::SetNextItemWidth(80);
+			ImGui::SetNextItemWidth(140);
 			if (ImGui::InputInt("##int", &v, 1, 10)) {
 				o.intValue = v;
 				g.PushEvent(D2UI_EVT_OPTION, o.intValue, 0, 0, o.key.c_str(), nullptr);
@@ -888,9 +998,8 @@ void DrawCompare() {
 	if (ImGui::Button("None"))
 		g.PushEvent(D2UI_EVT_COMPARE_NONE);
 
-	if (ImGui::BeginTable("compare", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable,
-			ImVec2(-1, -8))) {
-		ImGui::TableSetupScrollFreeze(0, 1);
+	ImGui::BeginChild("compare_scroll", ImVec2(0, -8), ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+	if (ImGui::BeginTable("compare", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
 		ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 50);
 		ImGui::TableSetupColumn("Name");
 		ImGui::TableHeadersRow();
@@ -911,6 +1020,7 @@ void DrawCompare() {
 		}
 		ImGui::EndTable();
 	}
+	ImGui::EndChild();
 }
 
 void DrawDiffWindow() {
@@ -920,9 +1030,9 @@ void DrawDiffWindow() {
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
 							 ImGuiWindowFlags_NoBringToFrontOnFocus;
 	ImGui::Begin("##statdiff", nullptr, flags);
-	if (ImGui::BeginTable("diff", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable,
-			ImVec2(-1, -ImGui::GetFrameHeightWithSpacing() - 4))) {
-		ImGui::TableSetupScrollFreeze(0, 1);
+	ImGui::BeginChild("diff_scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4), ImGuiChildFlags_None,
+		ImGuiWindowFlags_AlwaysVerticalScrollbar);
+	if (ImGui::BeginTable("diff", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
 		ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 50);
 		ImGui::TableSetupColumn("Name");
 		ImGui::TableSetupColumn("Old", ImGuiTableColumnFlags_WidthFixed, 80);
@@ -944,6 +1054,7 @@ void DrawDiffWindow() {
 		}
 		ImGui::EndTable();
 	}
+	ImGui::EndChild();
 	if (ImGui::Button("Close", ImVec2(100, 0))) {
 		g.showDiff = false;
 		if (g.diffHwnd)
@@ -992,11 +1103,7 @@ bool EnsureDiffWindow(bool focus) {
 	if (!g.diffCtx) {
 		g.diffCtx = ImGui::CreateContext();
 		ImGui::SetCurrentContext(g.diffCtx);
-		ImGui::StyleColorsDark();
-		ImGuiStyle& uiStyle = ImGui::GetStyle();
-		uiStyle.FramePadding = ImVec2(6, 4);
-		uiStyle.ItemSpacing = ImVec2(8, 6);
-		uiStyle.ScrollbarSize = 16.0f;
+		ApplyThemeToCurrentContext();
 		ImGuiIO& io = ImGui::GetIO();
 		io.IniFilename = nullptr;
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -1035,7 +1142,8 @@ void PresentDiff() {
 	DrawDiffWindow();
 	ImGui::Render();
 
-	const float clear[4] = {0.08f, 0.08f, 0.10f, 1.0f};
+	ImVec4 diffBg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+	const float clear[4] = {diffBg.x, diffBg.y, diffBg.z, 1.0f};
 	g.context->OMSetRenderTargets(1, &g.diffRtv, nullptr);
 	g.context->ClearRenderTargetView(g.diffRtv, clear);
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -1070,27 +1178,38 @@ void DestroyDiffUi() {
 		ImGui::SetCurrentContext(g.mainCtx);
 }
 
+void DrawSpeedCalcCombo(int which, float width = -FLT_MIN) {
+	const char* preview = g.scSelected[which].empty() ? "Auto" : g.scSelected[which].c_str();
+	int idx = IndexOf(g.scCombo[which], g.scSelected[which]);
+	ImGui::SetNextItemWidth(width);
+	if (ImGui::BeginCombo("##combo", preview)) {
+		for (int c = 0; c < static_cast<int>(g.scCombo[which].size()); ++c) {
+			bool sel = (c == idx);
+			if (ImGui::Selectable(g.scCombo[which][static_cast<size_t>(c)].c_str(), sel)) {
+				g.scSelected[which] = g.scCombo[which][static_cast<size_t>(c)];
+				g.PushEvent(D2UI_EVT_SC_COMBO, which, 0, 0, nullptr, g.scSelected[which].c_str());
+			}
+			if (sel)
+				ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+}
+
 void DrawSpeedCalc() {
 	const char* comboLabels[5] = {"Class", "Morph", "Weapon Type", "Weapon Base", "Debuff"};
-	if (ImGui::BeginTable("sccombos", 4, ImGuiTableFlags_SizingStretchProp)) {
+	if (ImGui::BeginTable("sccombos", 4, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX)) {
+		ImGui::TableSetupColumn("class");
+		ImGui::TableSetupColumn("morph");
+		ImGui::TableSetupColumn("wtype");
+		ImGui::TableSetupColumn("wbase");
 		ImGui::TableNextRow();
 		for (int i = 0; i < 4; ++i) {
 			ImGui::TableSetColumnIndex(i);
 			ImGui::PushID(i);
 			ImGui::TextUnformatted(comboLabels[i]);
-			int idx = IndexOf(g.scCombo[i], g.scSelected[i]);
-			ImGui::SetNextItemWidth(-1);
 			ImGui::BeginDisabled(i == 1 && !g.scMorphEnabled);
-			if (!g.scCombo[i].empty() && ImGui::BeginCombo("##combo", g.scSelected[i].c_str())) {
-				for (int c = 0; c < static_cast<int>(g.scCombo[i].size()); ++c) {
-					bool sel = (c == idx);
-					if (ImGui::Selectable(g.scCombo[i][static_cast<size_t>(c)].c_str(), sel)) {
-						g.scSelected[i] = g.scCombo[i][static_cast<size_t>(c)];
-						g.PushEvent(D2UI_EVT_SC_COMBO, i, 0, 0, nullptr, g.scSelected[i].c_str());
-					}
-				}
-				ImGui::EndCombo();
-			}
+			DrawSpeedCalcCombo(i);
 			ImGui::EndDisabled();
 			ImGui::PopID();
 		}
@@ -1098,43 +1217,35 @@ void DrawSpeedCalc() {
 	}
 
 	const char* inputs[5] = {"IAS", "Skill IAS", "FCR", "FHR", "FBR"};
-	for (int i = 0; i < 5; ++i) {
-		ImGui::PushID(100 + i);
-		ImGui::BeginGroup();
-		ImGui::TextUnformatted(inputs[i]);
-		char buf[32];
-		snprintf(buf, sizeof(buf), "%s", g.scInput[i].c_str());
-		ImGui::SetNextItemWidth(i == 1 ? 72.0f : 56.0f);
-		if (ImGui::InputText("##in", buf, sizeof(buf))) {
-			g.scInput[i] = buf;
-			g.PushEvent(D2UI_EVT_SC_INPUT, i, 0, 0, nullptr, buf);
-		}
-		ImGui::EndGroup();
-		ImGui::PopID();
-		ImGui::SameLine();
-	}
-	ImGui::BeginGroup();
-	ImGui::TextUnformatted("Debuff");
-	int didx = IndexOf(g.scCombo[4], g.scSelected[4]);
-	ImGui::SetNextItemWidth(160);
-	if (!g.scCombo[4].empty() && ImGui::BeginCombo("##debuff", g.scSelected[4].c_str())) {
-		for (int c = 0; c < static_cast<int>(g.scCombo[4].size()); ++c) {
-			bool sel = (c == didx);
-			if (ImGui::Selectable(g.scCombo[4][static_cast<size_t>(c)].c_str(), sel)) {
-				g.scSelected[4] = g.scCombo[4][static_cast<size_t>(c)];
-				g.PushEvent(D2UI_EVT_SC_COMBO, 4, 0, 0, nullptr, g.scSelected[4].c_str());
+	if (ImGui::BeginTable("scinputs", 6, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX)) {
+		ImGui::TableNextRow();
+		for (int i = 0; i < 5; ++i) {
+			ImGui::TableSetColumnIndex(i);
+			ImGui::PushID(100 + i);
+			ImGui::TextUnformatted(inputs[i]);
+			char buf[32];
+			snprintf(buf, sizeof(buf), "%s", g.scInput[i].c_str());
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			if (ImGui::InputText("##in", buf, sizeof(buf))) {
+				g.scInput[i] = buf;
+				g.PushEvent(D2UI_EVT_SC_INPUT, i, 0, 0, nullptr, buf);
 			}
+			ImGui::PopID();
 		}
-		ImGui::EndCombo();
+		ImGui::TableSetColumnIndex(5);
+		ImGui::PushID(105);
+		ImGui::TextUnformatted("Debuff");
+		DrawSpeedCalcCombo(4);
+		ImGui::PopID();
+		ImGui::EndTable();
 	}
-	ImGui::EndGroup();
 	if (g.scCheckVisible[0]) {
-		ImGui::SameLine();
 		if (ImGui::Checkbox("Dual Wield", &g.scCheck[0]))
 			g.PushEvent(D2UI_EVT_SC_CHECK, 0, g.scCheck[0] ? 1 : 0);
 	}
 	if (g.scCheckVisible[1]) {
-		ImGui::SameLine();
+		if (g.scCheckVisible[0])
+			ImGui::SameLine();
 		if (ImGui::Checkbox("Throw", &g.scCheck[1]))
 			g.PushEvent(D2UI_EVT_SC_CHECK, 1, g.scCheck[1] ? 1 : 0);
 	}
@@ -1148,7 +1259,8 @@ void DrawSpeedCalc() {
 			ImGui::TableSetColumnIndex(t);
 			ImGui::PushID(200 + t);
 			ImGui::TextUnformatted(tables[t]);
-			if (ImGui::BeginTable("bp", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY, ImVec2(-1, 180))) {
+			ImGui::BeginChild("bpwrap", ImVec2(0, 180), ImGuiChildFlags_Borders, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+			if (ImGui::BeginTable("bp", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
 				ImGui::TableSetupColumn("Frm", ImGuiTableColumnFlags_WidthFixed, 40);
 				ImGui::TableSetupColumn("Value");
 				ImGui::TableHeadersRow();
@@ -1163,6 +1275,7 @@ void DrawSpeedCalc() {
 				}
 				ImGui::EndTable();
 			}
+			ImGui::EndChild();
 			ImGui::PopID();
 		}
 		ImGui::EndTable();
@@ -1199,38 +1312,74 @@ void DrawTabContents(int tab) {
 		DrawAbout();
 }
 
+void DrawTabStrip() {
+	const char* names[] = {"Basic", "Page 1", "Page 2", "Notifier", "Speedcalc", "Compare", "Options", "Hotkeys", "Sounds", "About"};
+	const int cols = 5;
+	const int rows = 2;
+	const float height = ImGui::GetFrameHeight();
+	const float overline = std::max(ImGui::GetStyle().TabBarOverlineSize, 2.0f);
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+	for (int row = 0; row < rows; ++row) {
+		const float avail = ImGui::GetContentRegionAvail().x;
+		const float tabW = avail / static_cast<float>(cols);
+		const ImVec2 rowPos = ImGui::GetCursorScreenPos();
+		for (int col = 0; col < cols; ++col) {
+			const int t = row * cols + col;
+			const float x0 = rowPos.x + tabW * static_cast<float>(col);
+			const float x1 = (col == cols - 1) ? (rowPos.x + avail) : (rowPos.x + tabW * static_cast<float>(col + 1));
+			ImGui::SetCursorScreenPos(ImVec2(x0, rowPos.y));
+			ImGui::PushID(t);
+			if (ImGui::InvisibleButton("tab", ImVec2(x1 - x0, height))) {
+				if (g.activeTab != t) {
+					g.activeTab = t;
+					g.PushEvent(D2UI_EVT_TAB, t);
+				}
+			}
+			const bool selected = g.activeTab == t;
+			const bool hovered = ImGui::IsItemHovered();
+			ImU32 bg = ImGui::GetColorU32(selected ? ImGuiCol_TabSelected : hovered ? ImGuiCol_TabHovered : ImGuiCol_Tab);
+			dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + height), bg);
+			if (selected)
+				dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + overline), ImGui::GetColorU32(ImGuiCol_TabSelectedOverline));
+			const ImVec2 textSz = ImGui::CalcTextSize(names[t]);
+			dl->AddText(ImVec2(x0 + (x1 - x0 - textSz.x) * 0.5f, rowPos.y + (height - textSz.y) * 0.5f),
+				ImGui::GetColorU32(ImGuiCol_Text), names[t]);
+			ImGui::PopID();
+		}
+		ImGui::SetCursorScreenPos(rowPos);
+		ImGui::Dummy(ImVec2(avail, height));
+	}
+	ImVec2 line = ImGui::GetCursorScreenPos();
+	dl->AddLine(line, ImVec2(line.x + ImGui::GetContentRegionAvail().x, line.y), ImGui::GetColorU32(ImGuiCol_Border));
+	ImGui::PopStyleVar();
+	ImGui::Dummy(ImVec2(0, 6.0f));
+}
+
 void DrawMainUi() {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(vp->WorkPos);
 	ImGui::SetNextWindowSize(vp->WorkSize);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
 							 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 	ImGui::Begin("D2Stats", nullptr, flags);
 
-	const float bottomH = ImGui::GetFrameHeightWithSpacing() + 10.0f;
-	if (ImGui::BeginTabBar("tabs", ImGuiTabBarFlags_FittingPolicyScroll | ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
-		const char* names[] = {"Basic", "Page 1", "Page 2", "Notifier", "Speedcalc", "Compare", "Options", "Hotkeys", "Sounds", "About"};
-		int nextTab = g.activeTab;
-		for (int t = 0; t < 10; ++t) {
-			if (ImGui::BeginTabItem(names[t])) {
-				nextTab = t;
-				ImGui::EndTabItem();
-			}
-		}
-		ImGui::EndTabBar();
-		if (nextTab != g.activeTab) {
-			g.activeTab = nextTab;
-			g.PushEvent(D2UI_EVT_TAB, g.activeTab);
-		}
-	}
+	const float bottomH = ImGui::GetFrameHeight() + 4.0f;
+	DrawTabStrip();
 
-	ImGui::BeginChild("tabbody", ImVec2(0, -bottomH), ImGuiChildFlags_None);
+	const bool innerScrolls =
+		g.activeTab == D2UI_TAB_NOTIFIER || g.activeTab == D2UI_TAB_COMPARE;
+	ImGuiWindowFlags bodyFlags = innerScrolls
+		? (ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)
+		: ImGuiWindowFlags_AlwaysVerticalScrollbar;
+	ImGui::BeginChild("tabbody", ImVec2(0, -bottomH), ImGuiChildFlags_None, bodyFlags);
 	DrawTabContents(g.activeTab);
 	ImGui::EndChild();
 
-	ImGui::Separator();
 	DrawBottomBar();
 	ImGui::End();
+	ImGui::PopStyleVar();
 
 	if (g.capturingHotkey >= 0) {
 		int code = CaptureHotkey();
@@ -1364,7 +1513,7 @@ int D2UI_CALL D2Ui_Init(const wchar_t* title, int width, int height, const wchar
 	RegisterClassExW(&g.overlayWc);
 
 	int w = width > 0 ? width : 572;
-	int h = height > 0 ? height : 350;
+	int h = height > 0 ? height : 370;
 	DWORD style = WS_OVERLAPPEDWINDOW;
 	RECT rc{0, 0, w, h};
 	AdjustWindowRect(&rc, style, FALSE);
@@ -1384,11 +1533,8 @@ int D2UI_CALL D2Ui_Init(const wchar_t* title, int width, int height, const wchar
 	IMGUI_CHECKVERSION();
 	g.mainCtx = ImGui::CreateContext();
 	ImGui::SetCurrentContext(g.mainCtx);
-	ImGui::StyleColorsDark();
-	ImGuiStyle& uiStyle = ImGui::GetStyle();
-	uiStyle.FramePadding = ImVec2(6, 4);
-	uiStyle.ItemSpacing = ImVec2(8, 6);
-	uiStyle.ScrollbarSize = 16.0f;
+	LoadTheme();
+	ApplyThemeToCurrentContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -1398,7 +1544,7 @@ int D2UI_CALL D2Ui_Init(const wchar_t* title, int width, int height, const wchar
 
 	g.overlayCtx = ImGui::CreateContext();
 	ImGui::SetCurrentContext(g.overlayCtx);
-	ImGui::StyleColorsDark();
+	ApplyThemeToCurrentContext();
 	ImGuiIO& oio = ImGui::GetIO();
 	oio.IniFilename = nullptr;
 	oio.ConfigFlags |= ImGuiConfigFlags_NoMouse;
@@ -1478,7 +1624,8 @@ int D2UI_CALL D2Ui_Tick() {
 	DrawMainUi();
 	ImGui::Render();
 
-	const float clear[4] = {0.08f, 0.08f, 0.10f, 1.0f};
+	ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+	const float clear[4] = {bg.x, bg.y, bg.z, 1.0f};
 	g.context->OMSetRenderTargets(1, &g.mainRtv, nullptr);
 	g.context->ClearRenderTargetView(g.mainRtv, clear);
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

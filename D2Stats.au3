@@ -561,7 +561,7 @@ func CreateGUI()
 	global $g_iGroupWidth = 135
 	global $g_iGroupXStart = 8
 	global $g_iGUIWidth = 32 + 4 * $g_iGroupWidth
-	global $g_iGUIHeight = 350
+	global $g_iGUIHeight = 370
 
 	local $sTitle = not @Compiled ? "Test" : StringFormat("D2Stats %s - [%s]", FileGetVersion(@AutoItExe, "FileVersion"), FileGetVersion(@AutoItExe, "Comments"))
 
