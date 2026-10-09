@@ -49,7 +49,6 @@ func CompareStats($bReplaceSnapshot = True)
     next
     
     if ($statDiffCount > 0) then
-        ; Create our own dialog instead of using _ArrayDisplay
         ShowStatDiffDialog($g_statDiff)
     else
         PrintString("No stat differences found.", $ePrintBlue)
@@ -61,89 +60,12 @@ func CompareStats($bReplaceSnapshot = True)
 endfunc
 
 func ShowStatDiffDialog($aStats)
-    ; Store current option settings
-    Local $oldOptGUIOnEventMode = Opt("GUIOnEventMode", 0)
-    Local $oldOptGUICloseOnESC = Opt("GUICloseOnESC", 1)
-
-    ; Check overlay state before creating dialog
-    Local $bOverlayWasVisible = ($g_hOverlayGUI <> 0 And WinExists($g_hOverlayGUI))    
-    Local $hDiffGUI = GUICreate("Stat Differences", 860, 600, -1, -1, BitOR($WS_CAPTION, $WS_POPUPWINDOW, $WS_SIZEBOX), $WS_EX_TOOLWINDOW, $g_hGUI)
-    
-    If $hDiffGUI = 0 Then
-        Opt("GUIOnEventMode", $oldOptGUIOnEventMode)
-        Opt("GUICloseOnESC", $oldOptGUICloseOnESC)
-        Return
-    EndIf
-
-    GUISetFont(10, 400, 0, "Courier New")
-    GUISetBkColor(0xFFFFFF)
-    
-    Local $idList = GUICtrlCreateListView("ID|Name|Old|New|Diff", 10, 10, 840, 550)
-    GUICtrlSetFont(-1, 10, 400, 0, "Courier New")
-    GUICtrlSetBkColor(-1, 0xFFFFFF)
-    
-    _GUICtrlListView_SetExtendedListViewStyle($idList, BitOR($LVS_EX_GRIDLINES, $LVS_EX_FULLROWSELECT))
-
-    ; Set column widths
-    _GUICtrlListView_SetColumnWidth($idList, 0, 60)   ; Stat ID
-    _GUICtrlListView_SetColumnWidth($idList, 1, 450)  ; Name
-    _GUICtrlListView_SetColumnWidth($idList, 2, 80)   ; Old
-    _GUICtrlListView_SetColumnWidth($idList, 3, 80)   ; New
-    _GUICtrlListView_SetColumnWidth($idList, 4, 80)   ; Diff
-
-    ; Add data to listview
-    For $i = 0 To UBound($aStats) - 1
-        GUICtrlCreateListViewItem($aStats[$i][0] & "|" & $aStats[$i][1] & "|" & $aStats[$i][2] & "|" & $aStats[$i][3] & "|" & $aStats[$i][4], $idList)
-    Next
-
-    Local $idClose = GUICtrlCreateButton("Close", 380, 570, 100, 25)
-
-    GUISetState(@SW_SHOW, $hDiffGUI)
-    WinActivate($hDiffGUI)
-    
-    ; Message loop
-	Local $iMsg = 0
-	Local $iLoopCount = 0
-
-	While WinExists($hDiffGUI)
-		; Only process messages occasionally to reduce CPU usage
-		If Mod($iLoopCount, 5) = 0 Then
-			$iMsg = GUIGetMsg(1)
-			
-			If $iMsg[0] <> 0 And $iMsg[1] = $hDiffGUI Then
-				
-				Switch $iMsg[0]
-					Case $GUI_EVENT_CLOSE
-						ExitLoop
-					Case $idClose
-						ExitLoop
-				EndSwitch
-			EndIf
-		EndIf
-		
-		; Check for ESC key
-		If _IsPressed("1B") Then ; ESC key
-			ExitLoop
-		EndIf
-		
-		$iLoopCount += 1
-		Sleep(5)
-	WEnd
-
-    ; Cleanup
-	GUIDelete($hDiffGUI)
-
-    ; Restore original options
-    Opt("GUIOnEventMode", $oldOptGUIOnEventMode)
-    Opt("GUICloseOnESC", $oldOptGUICloseOnESC)
-    
-    ; Call overlay recovery
-    RecoverOverlay()
-
-    If Not $g_bCleanupRunning Then
-		AdlibRegister("CleanUpExpiredText", 100)
-		$g_bCleanupRunning = True
-	EndIf
+	Ui_ClearDiff()
+	Local $i
+	For $i = 0 To UBound($aStats) - 1
+		Ui_AddDiffRow($aStats[$i][0], $aStats[$i][1], $aStats[$i][2], $aStats[$i][3], $aStats[$i][4])
+	Next
+	Ui_ShowDiff(True)
 EndFunc
 
 func GetCompareStatName($iStat)
@@ -164,28 +86,16 @@ func GetCompareListStatId($iIndex)
 endfunc
 
 func RefreshCompareList()
-	local $sFilter = GUICtrlRead($g_idCompareFilter)
-	local $sName, $iIndex
-	local $hList = GetCompareListHandle()
-
-	AdlibUnRegister("EnableCompareSave")
-	$g_bCompareSaveSuspend = True
-	_GUICtrlListView_BeginUpdate($hList)
-	; Native DeleteAllItems treats ItemParam as a control ID and can delete tab items.
-	_SendMessage($hList, $LVM_DELETEALLITEMS)
-
+	local $sFilter = $g_sCompareFilter
+	local $sName
+	Ui_ClearCompareList()
 	for $i = 0 to $g_iNumStats - 1
 		$sName = GetCompareStatName($i)
 		if ($sFilter <> "") then
 			if (StringInStr($sName, $sFilter, $STR_NOCASESENSEBASIC) == 0 and StringInStr(String($i), $sFilter) == 0) then continueloop
 		endif
-		$iIndex = _GUICtrlListView_AddItem($hList, $i)
-		_GUICtrlListView_AddSubItem($hList, $iIndex, $sName, 1)
-		_GUICtrlListView_SetItemChecked($hList, $iIndex, $g_abCompareEnabled[$i])
+		Ui_AddCompareItem($i, $sName, $g_abCompareEnabled[$i])
 	next
-
-	_GUICtrlListView_EndUpdate($hList)
-	AdlibRegister("EnableCompareSave", 100)
 endfunc
 
 func EnableCompareSave()
@@ -206,17 +116,17 @@ func OnClick_CompareNone()
 endfunc
 
 func SetVisibleCompareEnabled($bEnabled)
-	local $iCount = _GUICtrlListView_GetItemCount($g_idCompareList)
-	local $iStatId
-
-	$g_bCompareSaveSuspend = True
-	for $i = 0 to $iCount - 1
-		$iStatId = GetCompareListStatId($i)
-		if ($iStatId >= 0 and $iStatId < $g_iNumStats) then $g_abCompareEnabled[$iStatId] = $bEnabled
-		_GUICtrlListView_SetItemChecked($g_idCompareList, $i, $bEnabled)
+	local $sFilter = $g_sCompareFilter
+	local $sName, $i
+	for $i = 0 to $g_iNumStats - 1
+		$sName = GetCompareStatName($i)
+		if ($sFilter <> "") then
+			if (StringInStr($sName, $sFilter, $STR_NOCASESENSEBASIC) == 0 and StringInStr(String($i), $sFilter) == 0) then continueloop
+		endif
+		$g_abCompareEnabled[$i] = $bEnabled
 	next
-	$g_bCompareSaveSuspend = False
 	SaveGUICompare()
+	RefreshCompareList()
 endfunc
 
 func SaveGUICompare()
@@ -309,24 +219,7 @@ func ApplyCompareDisabledString($sOff)
 endfunc
 
 func Compare_CreateTab()
-	local $iBottomButtonCoords = $g_iGUIHeight - 30
-	GUICtrlCreateTabItem("Compare")
-	$g_iTabCompare = GUICtrlSendMsg($g_idTab, $TCM_GETITEMCOUNT, 0, 0) - 1
-	local $iFilterY = _GUI_LineY(0)
-	local $iCompareBtnW = 50
-	local $iFilterW = $g_iGUIWidth - 8 - 2 * $iCompareBtnW - 8
-	$g_idCompareFilter = GUICtrlCreateInput("", 4, $iFilterY, $iFilterW, 22)
-	GUICtrlCreateButton("All", 4 + $iFilterW + 4, $iFilterY, $iCompareBtnW, 22)
-	GUICtrlSetOnEvent(-1, "OnClick_CompareAll")
-	GUICtrlCreateButton("None", 4 + $iFilterW + 8 + $iCompareBtnW, $iFilterY, $iCompareBtnW, 22)
-	GUICtrlSetOnEvent(-1, "OnClick_CompareNone")
-
-	local $iListY = $iFilterY + 26
-	local $iListH = $iBottomButtonCoords - $iListY - 5
-	$g_idCompareList = GUICtrlCreateListView("ID|Name", 4, $iListY, $g_iGUIWidth - 8, $iListH, BitOR($LVS_REPORT, $GUI_SS_DEFAULT_LISTVIEW, $LVS_NOSORTHEADER))
-	_GUICtrlListView_SetExtendedListViewStyle($g_idCompareList, BitOR($LVS_EX_CHECKBOXES, $LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES, $LVS_EX_DOUBLEBUFFER))
-	_GUICtrlListView_SetColumnWidth($g_idCompareList, 0, 50)
-	_GUICtrlListView_SetColumnWidth($g_idCompareList, 1, $g_iGUIWidth - 90)
+	$g_iTabCompare = 5
 	LoadGUICompare()
 	RefreshCompareList()
 endfunc

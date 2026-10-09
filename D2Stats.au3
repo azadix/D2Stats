@@ -129,6 +129,7 @@ DefineGlobals()
 #include "src/Compare.au3"
 #include "src/Hotkeys.au3"
 #include "src/SpeedCalc.au3"
+#include "src/UiBridge.au3"
 
 OnAutoItExitRegister("_Exit")
 
@@ -143,7 +144,10 @@ func Main()
 	local $bIsIngame
 
 	while 1
-		Sleep(100)
+		Sleep(16)
+
+		if (not Ui_Tick()) then _Exit()
+		Ui_DrainEvents()
 
 		if (TimerDiff($hTimerUpdateDelay) > 250) then
 			OverlayMain()
@@ -170,7 +174,7 @@ func Main()
 				$g_hTimerCopyName = 0
 			endif
 
-			if (GUICtrlRead($g_idTab) == $g_iTabSpeedCalc) then SpeedCalc_Refresh()
+			if (Ui_GetActiveTab() == $g_iTabSpeedCalc) then SpeedCalc_Refresh()
 
 			if ($g_hTimerCopyName and TimerDiff($g_hTimerCopyName) > 10000) then
 				$g_hTimerCopyName = 0
@@ -182,7 +186,7 @@ func Main()
 endfunc
 
 func _Exit()
-	if (IsDeclared("g_idNotifySave") and BitAND(GUICtrlGetState($g_idNotifySave), $GUI_ENABLE)) then
+	if (Ui_IsNotifierDirty()) then
 		local $iButton = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "D2Stats", "There are unsaved changes in the notifier rules. Save?", 0, $g_hGUI)
 		if ($iButton == $IDYES) then OnClick_NotifySave()
 	endif
@@ -191,7 +195,7 @@ func _Exit()
 
 	OnAutoItExitUnRegister("_Exit")
 	_GUICtrlHKI_Release()
-	GUIDelete()
+	Ui_Shutdown()
 	_CloseHandle()
 	_LogSave()
 	exit
@@ -248,31 +252,30 @@ func _GUI_ItemCount()
 	return $g_avGUI[0][0]
 endfunc
 
+func _GUI_StatGroup()
+	local $iGroup = Int((_GUI_GroupX() - $g_iGroupXStart) / $g_iGroupWidth)
+	if ($iGroup < 0) then $iGroup = 0
+	return $iGroup
+endfunc
+
 func _GUI_NewItem($iLine, $sText, $sTip = default, $iColor = default)
 	$g_avGUI[0][0] += 1
 	local $iCount = $g_avGUI[0][0]
-
+	local $sTooltip = ($sTip = default) ? "" : StringReplace($sTip, "|", @LF)
+	local $iCol = ($iColor = default) ? -1 : $iColor
 	$g_avGUI[$iCount][0] = $sText
-	$g_avGUI[$iCount][1] = _GUI_GroupX()
-	$g_avGUI[$iCount][2] = _GUI_NewText($iLine, $sText, $sTip, $iColor)
+	$g_avGUI[$iCount][1] = _GUI_StatGroup()
+	$g_avGUI[$iCount][2] = Ui_AddStat($g_iCurrentStatTab, _GUI_StatGroup(), $iLine, $sText, $sTooltip, $iCol, False)
 endfunc
 
 func _GUI_NewText($iLine, $sText, $sTip = default, $iColor = default)
-	local $idRet = _GUI_NewTextBasic($iLine, $sText, False)
-
-	if ($sTip <> default) then
-		GUICtrlSetTip(-1, StringReplace($sTip, "|", @LF), default, default, $TIP_CENTER)
-	endif
-	if ($iColor >= default) then
-		GUICtrlSetColor(-1, $iColor)
-	endif
-	return $idRet
+	local $sTooltip = ($sTip = default) ? "" : StringReplace($sTip, "|", @LF)
+	local $iCol = ($iColor = default) ? -1 : $iColor
+	Ui_AddStat($g_iCurrentStatTab, _GUI_StatGroup(), $iLine, $sText, $sTooltip, $iCol, True)
 endfunc
 
 func _GUI_NewTextBasic($iLine, $sText, $bCentered = True)
-	local $iWidth = _GUI_StringWidth($sText)
-	local $iX = _GUI_GroupX() - ($bCentered ? $iWidth/2 : 0)
-	return GUICtrlCreateLabel($sText, $iX, _GUI_LineY($iLine), $iWidth, 15, $bCentered ? $SS_CENTER : $SS_LEFT)
+	#forceref $iLine, $sText, $bCentered
 endfunc
 
 func _GUI_ItemByRef($iItem, byref $sText, byref $iX, byref $idControl)
@@ -427,11 +430,8 @@ func _GUI_Option($sOption, $vValue = null)
 endfunc
 
 func _GUI_Volume($iIndex, $iValue = default)
-	local $id = $g_idVolumeSlider + $iIndex * 3
-
-	if not ($iValue == default) then GUICtrlSetData($id, $iValue)
-
-	return GUICtrlRead($id)
+	if not ($iValue == default) then Ui_SetVolume($iIndex, $iValue)
+	return Ui_GetVolume($iIndex)
 endfunc
 
 func WM_GETMINMAXINFO($hWnd, $MsgID, $wParam, $lParam)
@@ -482,11 +482,7 @@ func UpdateGUI()
 		next
 
 		$sText = StringStripWS($sText, BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING, $STR_STRIPSPACES))
-		GUICtrlSetData($idControl, $sText)
-		if ($iColor <> 0) then GUICtrlSetColor($idControl, $iColor)
-
-		$iWidth = _GUI_StringWidth($sText)
-		GUICtrlSetPos($idControl, $iX, default, $iWidth, default)
+		Ui_UpdateStat($idControl, $sText, $iColor == 0 ? -1 : $iColor)
 	next
 endfunc
 
@@ -498,16 +494,7 @@ func OnClick_ReadStats()
 endfunc
 
 func OnClick_Tab()
-	local $iTab = GUICtrlRead($g_idTab)
-	local $bStatTab = ($iTab < 3 or $iTab == $g_iTabCompare)
-	local $bSpeedCalc = ($iTab == $g_iTabSpeedCalc)
-	local $iReadState = ($bStatTab or $bSpeedCalc) ? $GUI_SHOW : $GUI_HIDE
-	local $iCompareState = $bStatTab ? $GUI_SHOW : $GUI_HIDE
-	GUICtrlSetState($g_idReadStats, $iReadState)
-	GUICtrlSetState($g_idReadMercenary, $iReadState)
-	GUICtrlSetState($g_idShowDiff, $iCompareState)
-	GUICtrlSetState($g_idShowDiffOnly, $iCompareState)
-	if ($bSpeedCalc) then SpeedCalc_Refresh(True)
+	if (Ui_GetActiveTab() == $g_iTabSpeedCalc) then SpeedCalc_Refresh(True)
 endfunc
 
 func OnClick_Forum()
@@ -578,133 +565,26 @@ func CreateGUI()
 
 	local $sTitle = not @Compiled ? "Test" : StringFormat("D2Stats %s - [%s]", FileGetVersion(@AutoItExe, "FileVersion"), FileGetVersion(@AutoItExe, "Comments"))
 
-	global $g_hGUI = GUICreate($sTitle, $g_iGUIWidth, $g_iGUIHeight, -1, -1, BitOR($GUI_SS_DEFAULT_GUI,$WS_SIZEBOX))
-	GUISetFont(9 / _GetDPI()[2], 0, 0, "Courier New")
-	GUISetOnEvent($GUI_EVENT_CLOSE, "_Exit")
-	global $g_WindowPos = WinGetPos($g_hGUI)
-	
-	local $iBottomButtonCoords = $g_iGUIHeight - 30
-
-	global $g_idReadStats = GUICtrlCreateButton("Read", $g_iGroupXStart, $iBottomButtonCoords, 70, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_ReadStats")
-
-	global $g_idShowDiff = GUICtrlCreateButton("Compare and replace", $g_iGroupXStart + 254, $iBottomButtonCoords, 140, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_ShowDiffAndReplace")
-	GUICtrlSetState(-1, $GUI_HIDE)
-
-	global $g_idShowDiffOnly = GUICtrlCreateButton("Compare", $g_iGroupXStart + 166, $iBottomButtonCoords, 80, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_ShowDiff")
-	GUICtrlSetState(-1, $GUI_HIDE)
-
-	global $g_idReadMercenary = GUICtrlCreateCheckbox("Mercenary", $g_iGroupXStart + 78, $iBottomButtonCoords + 1)
-
-	global $g_idTab = GUICtrlCreateTab(0, 0, $g_iGUIWidth, 44, BitOR($TCS_FOCUSNEVER, $TCS_MULTILINE, $TCS_BUTTONS, $TCS_FLATBUTTONS, $TCS_FIXEDWIDTH))
-	GUICtrlSetResizing(-1, BitOR($GUI_DOCKMENUBAR, $GUI_DOCKLEFT, $GUI_DOCKRIGHT))
-	GUICtrlSetOnEvent(-1, "OnClick_Tab")
-	GUICtrlSendMsg($g_idTab, $TCM_SETPADDING, 0, _WinAPI_MakeLong(1, 1))
-	GUICtrlSendMsg($g_idTab, $TCM_SETITEMSIZE, 0, _WinAPI_MakeLong(82, 20))
+	LoadGUISettings()
+	Ui_Init($sTitle, $g_iGUIWidth, $g_iGUIHeight)
 
 	StatsRead_CreateTabs()
-	LoadGUISettings()
-	Notifier_CreateTab()
-	_GUI_GroupX(8)
+	UpdateGUI()
+	Ui_PushOptions()
+	Ui_AssignHotkeys()
+	Ui_ApplyOverlayConfig()
 
+	Notifier_CreateTab()
 	SpeedCalc_CreateTab()
 	Compare_CreateTab()
-
-	GUICtrlCreateTabItem("Options")
-    
-    ; Create scroll buttons
-    Local $idScrollUp = GUICtrlCreateButton("▲", $g_iGUIWidth - 20, _GUI_LineY(0), 18, 18)
-    GUICtrlSetOnEvent(-1, "OptionsScrollUp")
-    Local $idScrollDown = GUICtrlCreateButton("▼", $g_iGUIWidth - 20, $g_iGUIHeight - 20, 18, 18)
-    GUICtrlSetOnEvent(-1, "OptionsScrollDown")
-    
-    ; Initialize options controls array
-    ReDim $g_aOptionsControls[$g_iGUIOptionsGeneral][2]
-    
-    Local $iOption = 0
-    For $i = 0 To $g_iGUIOptionsGeneral - 1
-        Local $aControls = _GUI_NewOption($i, $g_avGUIOptionList[$iOption][0], $g_avGUIOptionList[$iOption][3], $g_avGUIOptionList[$iOption][4])
-        $g_aOptionsControls[$i][0] = $aControls[1] ; Label
-		$g_aOptionsControls[$i][1] = $aControls[0] ; Control
-        
-        ; Hide options outside visible range
-        If $i >= $g_iOptionsVisibleLines Then
-            For $j = 0 To 1
-                If $g_aOptionsControls[$i][$j] Then
-                    GUICtrlSetState($g_aOptionsControls[$i][$j], $GUI_HIDE)
-                EndIf
-            Next
-        EndIf
-        
-        $iOption += 1
-    Next
-    UpdateOptionsScrollButtons()
-
-	GUICtrlCreateTabItem("Hotkeys")
-	for $i = 1 to $g_iGUIOptionsHotkey
-		_GUI_NewOption($i-1, $g_avGUIOptionList[$iOption][0], $g_avGUIOptionList[$iOption][3], $g_avGUIOptionList[$iOption][4])
-		$iOption += 1
+	LoadGUIVolume()
+	local $iVol
+	for $iVol = 0 to $g_iNumSounds - 1
+		Ui_SetVolume($iVol, _GUI_Volume($iVol))
 	next
-
-	Notifier_CreateSoundsTab()
-
-	GUICtrlCreateTabItem("About")
-	_GUI_GroupX(8)
-	_GUI_NewTextBasic(00, "Made by Wojen and Kyromyr, using Shaggi's offsets.", False)
-	_GUI_NewTextBasic(01, "Layout help by krys.", False)
-	_GUI_NewTextBasic(02, "Additional help by suchbalance and Quirinus.", False)
-	_GUI_NewTextBasic(03, "Sounds by MurderManTX and Cromi38.", False)
-
-	_GUI_NewTextBasic(05, "If you're unsure what any of the abbreviations mean, all of", False)
-	_GUI_NewTextBasic(06, "them should have a tooltip when hovered over.", False)
-
-	_GUI_NewTextBasic(08, "Hotkeys can be disabled by setting them to ESC.", False)
-
-	GUICtrlCreateButton("Forum", $g_iGroupXStart, $iBottomButtonCoords, 70, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_Forum")
-
-	GUICtrlCreateTabItem("")
-	GUICtrlSendMsg($g_idTab, $TCM_SETITEMSIZE, 0, _WinAPI_MakeLong(82, 20))
-	GUICtrlCreateLabel("", 0, 44, $g_iGUIWidth, 2, $SS_ETCHEDHORZ)
-	GUICtrlSetResizing(-1, BitOR($GUI_DOCKTOP, $GUI_DOCKLEFT, $GUI_DOCKRIGHT, $GUI_DOCKHEIGHT))
-	UpdateGUI()
-	OnClick_Tab()
-	GUIRegisterMsg($WM_COMMAND, "WM_COMMAND")
-	GUIRegisterMsg($WM_NOTIFY, "WM_NOTIFY")
-	GUIRegisterMsg($WM_GETMINMAXINFO, "WM_GETMINMAXINFO")
-	GUIRegisterMsg($WM_MOUSEWHEEL, "WM_MOUSEWHEEL")
-	GUISetState(@SW_SHOW)
 endfunc
 
 func UpdateGUIOptions()
-	local $sType, $sOption, $idControl, $sFunc, $vValue, $vOld
-
-	for $i = 1 to _GUI_OptionCount()
-		_GUI_OptionByRef($i, $sOption, $idControl, $sFunc)
-
-		$sType = _GUI_OptionType($sOption)
-		$vOld = _GUI_Option($sOption)
-		$vValue = $vOld
-
-		switch $sType
-			case "hk"
-				$vValue = _GUICtrlHKI_GetHotKey($idControl)
-			case "cb"
-				$vValue = BitAND(GUICtrlRead($idControl), $GUI_CHECKED) ? 1 : 0
-		endswitch
-
-		if not ($vOld == $vValue) then
-			_GUI_Option($sOption, $vValue)
-
-			if ($sType == "hk") then
-				if ($vOld) then _HotKey_Assign($vOld, 0, $HK_FLAG_D2STATS)
-				if ($vValue) then _HotKey_Assign($vValue, $sFunc, $HK_FLAG_D2STATS, "[CLASS:Diablo II]")
-			endif
-		endif
-	next
-
 	local $bEnable = IsIngame()
 	if ($bEnable <> $g_bHotkeysEnabled) then
 		if ($bEnable) then

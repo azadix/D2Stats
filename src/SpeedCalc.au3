@@ -12,6 +12,19 @@ global $g_idScDualWield, $g_idScThrowing, $g_idScStatus
 global $g_idScTable[4]
 global $g_ahScTable[4]
 global $g_aiScHighlightRow[4] = [-1, -1, -1, -1]
+global $g_bSpeedCalcReady = False
+global $g_sScClassSel = "Auto"
+global $g_sScMorphSel = "Auto"
+global $g_sScWeaponTypeSel = "Auto"
+global $g_sScWeaponBaseSel = "Auto"
+global $g_sScDebuffSel = ""
+global $g_sScIas = ""
+global $g_sScSkillIas = ""
+global $g_sScFcr = ""
+global $g_sScFhr = ""
+global $g_sScFbr = ""
+global $g_bScDualWield = False
+global $g_bScThrowing = False
 
 global $g_sScClassList = ""
 global $g_sScMorphList = ""
@@ -748,84 +761,61 @@ endfunc
 #Region SpeedCalc GUI
 func SpeedCalc_CreateTab()
 	SpeedCalc_InitCof()
-
-	GUICtrlCreateTabItem("Speedcalc")
-	$g_iTabSpeedCalc = GUICtrlSendMsg($g_idTab, $TCM_GETITEMCOUNT, 0, 0) - 1
-
-	local $iW = $g_iGUIWidth
-	local $iC1 = 110, $iC2 = 123, $iC3 = 116
-	local $iX1 = 6, $iX2 = $iX1 + $iC1 + 6, $iX3 = $iX2 + $iC2 + 6
-	local $iX4 = $iX3 + $iC3 + 6
-	local $iC4 = $iW - $iX4 - 6
-	local $iY = 48
-	GUICtrlCreateLabel("Class", $iX1, $iY, $iC1, 14)
-	GUICtrlCreateLabel("Morph", $iX2, $iY, $iC2, 14)
-	GUICtrlCreateLabel("Weapon Type", $iX3, $iY, $iC3, 14)
-	GUICtrlCreateLabel("Weapon Base", $iX4, $iY, $iC4, 14)
-
-	$iY = 62
-	$g_idScClass = GUICtrlCreateCombo("", $iX1, $iY, $iC1, 22, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScMorph = GUICtrlCreateCombo("", $iX2, $iY, $iC2, 22, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScWeaponType = GUICtrlCreateCombo("", $iX3, $iY, $iC3, 22, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScWeaponBase = GUICtrlCreateCombo("", $iX4, $iY, $iC4, 22, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-
-	local $iSlowW = 140
-	local $iSlowX = 304
-	$iY = 86
-	GUICtrlCreateLabel("IAS", 6, $iY, 54, 14)
-	GUICtrlCreateLabel("Skill IAS", 62, $iY, 70, 14)
-	GUICtrlCreateLabel("FCR", 134, $iY, 54, 14)
-	GUICtrlCreateLabel("FHR", 190, $iY, 54, 14)
-	GUICtrlCreateLabel("FBR", 246, $iY, 54, 14)
-	GUICtrlCreateLabel("Debuff", $iSlowX, $iY, $iSlowW, 14)
-
-	$iY = 100
-	$g_idScIas = GUICtrlCreateInput("", 6, $iY, 52, 20)
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScSkillIas = GUICtrlCreateInput("", 62, $iY, 68, 20)
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScFcr = GUICtrlCreateInput("", 134, $iY, 52, 20)
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScFhr = GUICtrlCreateInput("", 190, $iY, 52, 20)
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScFbr = GUICtrlCreateInput("", 246, $iY, 52, 20)
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScDebuff = GUICtrlCreateCombo("", $iSlowX, $iY, $iSlowW, 22, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScDualWield = GUICtrlCreateCheckbox("Dual Wield", $iSlowX + $iSlowW + 6, $iY, 90, 20)
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	$g_idScThrowing = GUICtrlCreateCheckbox("Throw", $iSlowX + $iSlowW + 94, $iY, 70, 20)
-	GUICtrlSetOnEvent(-1, "SpeedCalc_OnControl")
-	GUICtrlSetState($g_idScDualWield, $GUI_HIDE)
-	GUICtrlSetState($g_idScThrowing, $GUI_HIDE)
-
-	$g_idScStatus = GUICtrlCreateLabel("Empty fields use live item/skill stats. Auto follows class, morph, and weapon.", 6, 124, $iW - 12, 14)
-	GUICtrlSetColor(-1, 0x555555)
-
-	local $iTableW = 135
-	local $iTableH = 160
-	local $iGapX = 4
-	local $iTitleH = 14
-	local $iTableTop = 140
-	local $i, $iX
-	for $i = 0 to 3
-		$iX = 6 + $i * ($iTableW + $iGapX)
-		GUICtrlCreateLabel($g_asScAnimLabels[$i], $iX, $iTableTop, $iTableW, $iTitleH)
-		$g_idScTable[$i] = GUICtrlCreateListView("Frm|Value", $iX, $iTableTop + $iTitleH, $iTableW, $iTableH, BitOR($LVS_REPORT, $LVS_NOSORTHEADER, $LVS_SINGLESEL))
-		$g_ahScTable[$i] = GUICtrlGetHandle($g_idScTable[$i])
-		_GUICtrlListView_SetExtendedListViewStyle($g_idScTable[$i], BitOR($LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES, $LVS_EX_DOUBLEBUFFER))
-		_GUICtrlListView_SetColumnWidth($g_idScTable[$i], 0, 40)
-		_GUICtrlListView_SetColumnWidth($g_idScTable[$i], 1, 70)
-	next
-
+	$g_iTabSpeedCalc = 4
+	$g_bSpeedCalcReady = True
+	$g_idScClass = 1
 	SpeedCalc_RebuildClassCombo(False)
 	SpeedCalc_RebuildMorphCombo()
 	SpeedCalc_RebuildDebuffCombo()
-	GUICtrlSetOnEvent($g_idReadMercenary, "SpeedCalc_OnMercenary")
+	Ui_SetSpeedCalcInput(0, $g_sScIas)
+	Ui_SetSpeedCalcInput(1, $g_sScSkillIas)
+	Ui_SetSpeedCalcInput(2, $g_sScFcr)
+	Ui_SetSpeedCalcInput(3, $g_sScFhr)
+	Ui_SetSpeedCalcInput(4, $g_sScFbr)
+	Ui_SetSpeedCalcCheck(0, False, False)
+	Ui_SetSpeedCalcCheck(1, False, False)
+	Ui_SetSpeedCalcStatus("Empty fields use live item/skill stats. Auto follows class, morph, and weapon.")
+endfunc
+
+func SpeedCalc_OnUiCombo($iWhich, $sText)
+	switch $iWhich
+		case 0
+			$g_sScClassSel = $sText
+		case 1
+			$g_sScMorphSel = $sText
+		case 2
+			$g_sScWeaponTypeSel = $sText
+		case 3
+			$g_sScWeaponBaseSel = $sText
+		case 4
+			$g_sScDebuffSel = $sText
+	endswitch
+	SpeedCalc_OnControl()
+endfunc
+
+func SpeedCalc_OnUiInput($iWhich, $sText)
+	switch $iWhich
+		case 0
+			$g_sScIas = $sText
+		case 1
+			$g_sScSkillIas = $sText
+		case 2
+			$g_sScFcr = $sText
+		case 3
+			$g_sScFhr = $sText
+		case 4
+			$g_sScFbr = $sText
+	endswitch
+	SpeedCalc_OnControl()
+endfunc
+
+func SpeedCalc_OnUiCheck($iWhich, $bChecked)
+	if ($iWhich == 0) then
+		$g_bScDualWield = $bChecked
+	else
+		$g_bScThrowing = $bChecked
+	endif
+	SpeedCalc_OnControl()
 endfunc
 
 func SpeedCalc_OnMercenary()
@@ -837,7 +827,7 @@ func SpeedCalc_OnControl()
 endfunc
 
 func SpeedCalc_IsMercChecked()
-	return BitAND(GUICtrlRead($g_idReadMercenary), $GUI_CHECKED) <> 0
+	return $g_bReadMercenary
 endfunc
 
 func SpeedCalc_RebuildClassCombo($bMerc)
@@ -847,18 +837,18 @@ func SpeedCalc_RebuildClassCombo($bMerc)
 		for $i = 0 to UBound($g_avScMercs) - 1
 			$sData &= "|" & $g_avScMercs[$i][1]
 		next
-		GUICtrlSetState($g_idScMorph, $GUI_DISABLE)
+		Ui_SetSpeedCalcMorphEnabled(False)
 	else
 		for $i = 0 to UBound($g_avScClasses) - 1
 			$sData &= "|" & $g_avScClasses[$i][1]
 		next
-		GUICtrlSetState($g_idScMorph, $GUI_ENABLE)
+		Ui_SetSpeedCalcMorphEnabled(True)
 	endif
 	if ($sData <> $g_sScClassList) then
-		GUICtrlSetData($g_idScClass, "")
-		GUICtrlSetData($g_idScClass, $sData, "Auto")
+		$g_sScClassSel = "Auto"
 		$g_sScClassList = $sData
 	endif
+	Ui_SetSpeedCalcCombo(0, $sData, $g_sScClassSel)
 endfunc
 
 func SpeedCalc_RebuildMorphCombo()
@@ -867,10 +857,10 @@ func SpeedCalc_RebuildMorphCombo()
 		$sData &= "|" & $g_avScMorphs[$i][0]
 	next
 	if ($sData <> $g_sScMorphList) then
-		GUICtrlSetData($g_idScMorph, "")
-		GUICtrlSetData($g_idScMorph, $sData, "Auto")
+		$g_sScMorphSel = "Auto"
 		$g_sScMorphList = $sData
 	endif
+	Ui_SetSpeedCalcCombo(1, $sData, $g_sScMorphSel)
 endfunc
 
 func SpeedCalc_RebuildDebuffCombo($sKeep = "")
@@ -884,9 +874,9 @@ func SpeedCalc_RebuildDebuffCombo($sKeep = "")
 	else
 		$sSelect = SpeedCalc_DebuffLabel(0)
 	endif
-	GUICtrlSetData($g_idScDebuff, "")
-	GUICtrlSetData($g_idScDebuff, $sData, $sSelect)
+	$g_sScDebuffSel = $sSelect
 	$g_sScDebuffList = $sData
+	Ui_SetSpeedCalcCombo(4, $sData, $g_sScDebuffSel)
 endfunc
 
 func SpeedCalc_DebuffLabel($i)
@@ -898,7 +888,7 @@ func SpeedCalc_DebuffLabel($i)
 endfunc
 
 func SpeedCalc_SelectedDebuffIndex()
-	local $sSel = GUICtrlRead($g_idScDebuff)
+	local $sSel = $g_sScDebuffSel
 	local $i
 	for $i = 0 to UBound($g_avScDebuffs) - 1
 		if (SpeedCalc_DebuffLabel($i) == $sSel) then return $i
@@ -911,7 +901,22 @@ func SpeedCalc_SelectedDebuffValue()
 endfunc
 
 func SpeedCalc_ReadOverride($id)
-	local $s = StringStripWS(GUICtrlRead($id), 3)
+	local $s = ""
+	switch $id
+		case 0
+			$s = $g_sScIas
+		case 1
+			$s = $g_sScSkillIas
+		case 2
+			$s = $g_sScFcr
+		case 3
+			$s = $g_sScFhr
+		case 4
+			$s = $g_sScFbr
+		case else
+			$s = StringStripWS($id, 3)
+	endswitch
+	$s = StringStripWS($s, 3)
 	if ($s == "") then return Default
 	return Int($s)
 endfunc
@@ -928,7 +933,7 @@ endfunc
 func SpeedCalc_CurrentCharToken()
 	local $bMerc = SpeedCalc_IsMercChecked()
 	if (not $bMerc) then
-		local $sMorph = GUICtrlRead($g_idScMorph)
+		local $sMorph = $g_sScMorphSel
 		local $sTok = ""
 		if ($sMorph == "Auto") then
 			$sTok = SpeedCalc_MorphToken($g_sScLiveMorph)
@@ -938,7 +943,7 @@ func SpeedCalc_CurrentCharToken()
 		if ($sTok <> "") then return $sTok
 	endif
 
-	local $sClass = GUICtrlRead($g_idScClass)
+	local $sClass = $g_sScClassSel
 	if ($sClass <> "Auto" and $sClass <> "") then
 		local $j
 		if ($bMerc) then
@@ -960,7 +965,7 @@ func SpeedCalc_CurrentCharToken()
 endfunc
 
 func SpeedCalc_DisplayClassName($sCharToken)
-	local $sMorph = GUICtrlRead($g_idScMorph)
+	local $sMorph = $g_sScMorphSel
 	if (not SpeedCalc_IsMercChecked()) then
 		if ($sMorph == "Auto") then
 			if ($g_sScLiveMorph <> "") then return $g_sScLiveMorph
@@ -970,7 +975,7 @@ func SpeedCalc_DisplayClassName($sCharToken)
 	endif
 	local $i
 	if (SpeedCalc_IsMercChecked()) then
-		local $sClass = GUICtrlRead($g_idScClass)
+		local $sClass = $g_sScClassSel
 		if ($sClass <> "Auto" and $sClass <> "") then return $sClass
 		if ($g_iScLiveMercType >= 0) then return SpeedCalc_MercName($g_iScLiveMercType)
 		return "Mercenary"
@@ -993,14 +998,14 @@ func SpeedCalc_RebuildWeaponTypeCombo($sCharToken)
 		$g_asScWeaponTypeTokens[$iCount - 1] = $g_avScWeaponTypes[$i][0]
 	next
 	if ($sData <> $g_sScWeaponTypeList) then
-		GUICtrlSetData($g_idScWeaponType, "")
-		GUICtrlSetData($g_idScWeaponType, $sData, "Auto")
+		$g_sScWeaponTypeSel = "Auto"
 		$g_sScWeaponTypeList = $sData
 	endif
+	Ui_SetSpeedCalcCombo(2, $sData, $g_sScWeaponTypeSel)
 endfunc
 
 func SpeedCalc_SelectedWeaponTypeIndex($sCharToken)
-	local $sSel = GUICtrlRead($g_idScWeaponType)
+	local $sSel = $g_sScWeaponTypeSel
 	local $i, $iIdx
 	if ($sSel <> "Auto" and $sSel <> "") then
 		for $i = 0 to UBound($g_avScWeaponTypes) - 1
@@ -1045,10 +1050,10 @@ func SpeedCalc_RebuildWeaponBaseCombo($sFamilyToken)
 		next
 	endif
 	if ($sData <> $g_sScWeaponBaseList) then
-		GUICtrlSetData($g_idScWeaponBase, "")
-		GUICtrlSetData($g_idScWeaponBase, $sData, "Auto")
+		$g_sScWeaponBaseSel = "Auto"
 		$g_sScWeaponBaseList = $sData
 	endif
+	Ui_SetSpeedCalcCombo(3, $sData, $g_sScWeaponBaseSel)
 endfunc
 
 func SpeedCalc_SeenHas(byref $asSeen, $sName)
@@ -1060,7 +1065,7 @@ func SpeedCalc_SeenHas(byref $asSeen, $sName)
 endfunc
 
 func SpeedCalc_SelectedWsm($iWeaponIdx)
-	local $sSel = GUICtrlRead($g_idScWeaponBase)
+	local $sSel = $g_sScWeaponBaseSel
 	local $i
 	if ($sSel <> "Auto" and $sSel <> "") then
 		for $i = 0 to UBound($g_aiScWeaponBaseIndex) - 1
@@ -1084,14 +1089,14 @@ func SpeedCalc_SelectedWsm($iWeaponIdx)
 endfunc
 
 func SpeedCalc_SelectedBaseName($iWsm)
-	local $sSel = GUICtrlRead($g_idScWeaponBase)
+	local $sSel = $g_sScWeaponBaseSel
 	if ($sSel <> "Auto" and $sSel <> "") then return $sSel
 	if ($g_sScLiveWeaponName <> "") then return $g_sScLiveWeaponName & " (" & $iWsm & ")"
 	return "WSM " & $iWsm
 endfunc
 
 func SpeedCalc_Refresh($bForce = False)
-	if (not $g_idScClass) then return
+	if (not $g_bSpeedCalcReady) then return
 	SpeedCalc_InitCof()
 	if (IsIngame()) then UpdateStatValues()
 
@@ -1107,11 +1112,11 @@ func SpeedCalc_Refresh($bForce = False)
 
 	local $sCharToken = SpeedCalc_CurrentCharToken()
 	if ($sCharToken == "") then
-		GUICtrlSetData($g_idScStatus, "Not in game. Pick a class, or enter a game for Auto.")
+		Ui_SetSpeedCalcStatus("Not in game. Pick a class, or enter a game for Auto.")
 		if ($g_sScLastCharToken <> "" or $bForce or $g_sScLastTableSig <> "") then
 			local $iEmpty
 			for $iEmpty = 0 to 3
-				_GUICtrlListView_DeleteAllItems($g_idScTable[$iEmpty])
+				Ui_ClearSpeedCalcTable($iEmpty)
 				$g_aiScHighlightRow[$iEmpty] = -1
 			next
 			$g_sScLastCharToken = ""
@@ -1144,41 +1149,41 @@ func SpeedCalc_Refresh($bForce = False)
 		$bCanThrow = SpeedCalc_IsThrowingFamily($sFamilyToken) and not SpeedCalc_ThrowingDisallowed($sCharToken)
 	endif
 	if ($bCanDw) then
-		GUICtrlSetState($g_idScDualWield, $GUI_SHOW)
+		Ui_SetSpeedCalcCheck(0, $g_bScDualWield, True)
 	else
-		GUICtrlSetState($g_idScDualWield, $GUI_UNCHECKED)
-		GUICtrlSetState($g_idScDualWield, $GUI_HIDE)
+		$g_bScDualWield = False
+		Ui_SetSpeedCalcCheck(0, False, False)
 	endif
 	if ($bCanThrow) then
-		GUICtrlSetState($g_idScThrowing, $GUI_SHOW)
+		Ui_SetSpeedCalcCheck(1, $g_bScThrowing, True)
 	else
-		GUICtrlSetState($g_idScThrowing, $GUI_UNCHECKED)
-		GUICtrlSetState($g_idScThrowing, $GUI_HIDE)
+		$g_bScThrowing = False
+		Ui_SetSpeedCalcCheck(1, False, False)
 	endif
 
 	local $iWsm = SpeedCalc_SelectedWsm($iWeaponIdx)
-	local $iIas = SpeedCalc_ReadOverride($g_idScIas)
+	local $iIas = SpeedCalc_ReadOverride(0)
 	if ($iIas == Default) then $iIas = $g_iScLiveIas
-	local $iSkillIas = SpeedCalc_ReadOverride($g_idScSkillIas)
+	local $iSkillIas = SpeedCalc_ReadOverride(1)
 	if ($iSkillIas == Default) then $iSkillIas = $g_iScLiveSkillIas
-	local $iFcr = SpeedCalc_ReadOverride($g_idScFcr)
+	local $iFcr = SpeedCalc_ReadOverride(2)
 	if ($iFcr == Default) then $iFcr = $g_iScLiveFcr
-	local $iFhr = SpeedCalc_ReadOverride($g_idScFhr)
+	local $iFhr = SpeedCalc_ReadOverride(3)
 	if ($iFhr == Default) then $iFhr = $g_iScLiveFhr
-	local $iFbr = SpeedCalc_ReadOverride($g_idScFbr)
+	local $iFbr = SpeedCalc_ReadOverride(4)
 	if ($iFbr == Default) then $iFbr = $g_iScLiveFbr
 	local $iSkillFhr = $g_iScLiveSkillFhr
 	local $iDebuff = SpeedCalc_SelectedDebuffIndex()
 	local $iSlow = $g_avScDebuffs[$iDebuff][1]
 	$iIas += $g_avScDebuffs[$iDebuff][2]
 	$iFcr += $g_avScDebuffs[$iDebuff][3]
-	local $bDw = $bCanDw and BitAND(GUICtrlRead($g_idScDualWield), $GUI_CHECKED)
-	local $bTh = $bCanThrow and BitAND(GUICtrlRead($g_idScThrowing), $GUI_CHECKED)
+	local $bDw = $bCanDw and $g_bScDualWield
+	local $bTh = $bCanThrow and $g_bScThrowing
 
 	local $sWeaponName = ($iWeaponIdx >= 0) ? $g_avScWeaponTypes[$iWeaponIdx][1] : "?"
 	local $sStatus = SpeedCalc_DisplayClassName($sCharToken) & " | " & $sWeaponName & " | " & SpeedCalc_SelectedBaseName($iWsm)
 	$sStatus &= " | IAS " & $iIas & "/" & $iSkillIas & " FCR " & $iFcr & " FHR " & $iFhr & "/" & $iSkillFhr & " FBR " & $iFbr
-	GUICtrlSetData($g_idScStatus, $sStatus)
+	Ui_SetSpeedCalcStatus($sStatus)
 
 	local $sSig = $sCharToken & "|" & $iWeaponIdx & "|" & $iWsm & "|" & $iIas & "|" & $iSkillIas & "|" & $iFcr & "|" & $iFhr & "|" & $iFbr & "|" & $iSkillFhr & "|" & $iSlow & "|" & $bDw & "|" & $bTh
 	if (not $bForce and $sSig == $g_sScLastTableSig) then return
@@ -1196,24 +1201,18 @@ func SpeedCalc_Refresh($bForce = False)
 endfunc
 
 func SpeedCalc_FillTable($iAnim, $sCharToken, $sAnimType, $sPrimary, $sBlock, $iWsm, $iIas, $iSkillIas, $iFcr, $iFhr, $iFbr, $iSkillFhr, $iSlow, $bDw, $bTh, $bOverride, $iBlAnimSpeed)
-	local $id = $g_idScTable[$iAnim]
-	_GUICtrlListView_BeginUpdate($id)
-	_GUICtrlListView_DeleteAllItems($id)
+	Ui_ClearSpeedCalcTable($iAnim)
 	$g_aiScHighlightRow[$iAnim] = -1
 
 	local $sPrefix, $sWeaponAnim
 	if (not SpeedCalc_ResolveAnim($sCharToken, $sAnimType, $sPrimary, $sBlock, $bDw, $bTh, $sPrefix, $sWeaponAnim)) then
-		_GUICtrlListView_AddItem($id, "-")
-		_GUICtrlListView_AddSubItem($id, 0, "n/a", 1)
-		_GUICtrlListView_EndUpdate($id)
+		Ui_AddSpeedCalcRow($iAnim, "-", "n/a")
 		return
 	endif
 
 	local $iFrames, $iAnimSpeed
 	if (not SpeedCalc_LookupCof($sCharToken & $sPrefix & $sWeaponAnim, $iFrames, $iAnimSpeed)) then
-		_GUICtrlListView_AddItem($id, "-")
-		_GUICtrlListView_AddSubItem($id, 0, "no COF", 1)
-		_GUICtrlListView_EndUpdate($id)
+		Ui_AddSpeedCalcRow($iAnim, "-", "no COF")
 		return
 	endif
 	if ($sAnimType == "BL" and $iBlAnimSpeed >= 0) then $iAnimSpeed = $iBlAnimSpeed
@@ -1262,13 +1261,11 @@ func SpeedCalc_FillTable($iAnim, $sCharToken, $sAnimType, $sPrimary, $sBlock, $i
 		if ($k == $iCurrentIdx + 1 and $avRows[$k][1] > $iCurrentStat) then
 			$sReq &= " +" & ($avRows[$k][1] - $iCurrentStat)
 		endif
-		_GUICtrlListView_AddItem($id, $avRows[$k][0])
-		_GUICtrlListView_AddSubItem($id, $k, $sReq, 1)
+		Ui_AddSpeedCalcRow($iAnim, $avRows[$k][0], $sReq)
 	next
 
 	$g_aiScHighlightRow[$iAnim] = $iCurrentIdx
-	_GUICtrlListView_EndUpdate($id)
-	if ($iCurrentIdx >= 0) then _GUICtrlListView_EnsureVisible($id, $iCurrentIdx)
+	Ui_SetSpeedCalcHighlight($iAnim, $iCurrentIdx)
 endfunc
 
 func SpeedCalc_ListViewNotify($lParam)

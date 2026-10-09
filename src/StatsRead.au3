@@ -7,8 +7,7 @@ global $g_aiStatsCacheCopy[2][$g_iNumStats]
 
 #Region Stat reading
 func GetUnitToRead()
-	local $bMercenary = BitAND(GUICtrlRead($g_idReadMercenary), $GUI_CHECKED) ? True : False
-	return $g_hD2Client + ($bMercenary ? 0x10A80C : 0x11BBFC)
+    return $g_hD2Client + ($g_bReadMercenary ? 0x10A80C : 0x11BBFC)
 endfunc
 
 func UpdateStatValueMem($iVector)
@@ -497,7 +496,7 @@ endfunc
 
 #Region Stats
 func StatsRead_CreateTabs()
-	GUICtrlCreateTabItem("Basic")
+	$g_iCurrentStatTab = 0
 	_GUI_GroupFirst()
 	_GUI_NewText(00, "Character data")
 	_GUI_NewItem(01, "Level: {012}")
@@ -516,7 +515,7 @@ func StatsRead_CreateTabs()
 	_GUI_NewItem(02, "Exp.Gain: +{085}%")
 	_GUI_NewItem(03, "M.Skill: +{479}", "Maximum Skill Level")
 
-	GUICtrlCreateTabItem("Page 1")
+	$g_iCurrentStatTab = 1
 	_GUI_GroupFirst()
 	_GUI_NewText(00, "Base stats")
 	_GUI_NewItem(01, "Str: {000}", "Strength")
@@ -572,7 +571,7 @@ func StatsRead_CreateTabs()
 	_GUI_NewItem(12, "{431}% PSD", "Poison Skill Duration", $g_iColorArray[$ePrintGreen])
 	_GUI_NewItem(13, "{357}%/0%", "Physical/Magic", $g_iColorArray[$ePrintPink])
 
-	GUICtrlCreateTabItem("Page 2")
+	$g_iCurrentStatTab = 2
 	_GUI_GroupFirst()
 	_GUI_NewItem(00, "SF: {485}", "Spell Focus")
 	_GUI_NewItem(01, "SF.Cap: {244}%", "Spell Focus cap. 100% means you don't benefit from more spell focus")

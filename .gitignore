@@ -1,6 +1,14 @@
 *.ini
 D2Stats*.exe
 D2Stats*.txt
+d2stats_ui.dll
+d2stats_ui.new.dll
+d2stats_ui.lib
+d2stats_ui.exp
+d2stats_ui.pdb
+native/d2stats_ui/build/
+native/d2stats_ui/third_party/
+imgui.ini
 speedcalc-weapons.txt
 NotifierRules/*
 *.rar

@@ -105,26 +105,10 @@ func HotKey_ShowNotifierLog()
 	$g_bNotifierLogVisible = not $g_bNotifierLogVisible
 	
 	if ($g_bNotifierLogVisible) then
-		; Clear current overlay first
-		if ($g_hOverlayGUI <> 0) then
-			for $i = 0 to UBound($g_aMessages) - 1
-				GUICtrlDelete($g_aMessages[$i][0])
-				GUICtrlDelete($g_aMessages[$i][1])
-			next
-			ReDim $g_aMessages[0][4]
-			$g_iNextYPos = 0
-			$g_bCleanupRunning = False
-			AdlibUnRegister("CleanUpExpiredText")
-		endif
-		
-		; Set history mode flag
+		Ui_OverlayClear()
 		$g_bOverlayHistoryMode = True
-		
-		; Show header first
 		PrintString("--- Overlay History (Press again to hide) ---", $ePrintYellow)
 		OverlayAddItemGap()
-		
-		; Then show overlay history (newest first)
 		local $iHistorySize = UBound($g_aOverlayHistory)
 		if ($iHistorySize > 0) then
 			for $i = 0 to $iHistorySize - 1
@@ -134,22 +118,9 @@ func HotKey_ShowNotifierLog()
 		else
 			PrintString("No overlay history available.", $ePrintGrey)
 		endif
-		
-		; Clear history mode flag
 		$g_bOverlayHistoryMode = False
 	else
-		; Hide log by clearing overlay messages
-		if ($g_hOverlayGUI <> 0) then
-			; Clear all messages
-			for $i = 0 to UBound($g_aMessages) - 1
-				GUICtrlDelete($g_aMessages[$i][0])
-				GUICtrlDelete($g_aMessages[$i][1])
-			next
-			ReDim $g_aMessages[0][4]
-			$g_iNextYPos = 0
-			$g_bCleanupRunning = False
-			AdlibUnRegister("CleanUpExpiredText")
-		endif
+		Ui_OverlayClear()
 	endif
 endfunc
 #EndRegion

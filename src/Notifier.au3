@@ -731,14 +731,14 @@ endfunc
 
 #Region Notifier UI
 func OnChange_NotifyRulesCombo()
-	if (BitAND(GUICtrlGetState($g_idNotifySave), $GUI_ENABLE)) then
+	if (Ui_IsNotifierDirty()) then
 		local $iButton = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "D2Stats", "There are unsaved changes in the current notifier rules. Save?", 0, $g_hGUI)
 		if ($iButton == $IDYES) then
 			SaveCurrentNotifierRulesToFile(_GUI_Option("selectedNotifierRulesName"))
 		endif
 	endif
 	
-	local $sSelectedNofitierRules = GUICtrlRead($g_idNotifyRulesCombo)
+	local $sSelectedNofitierRules = Ui_GetNotifyRulesSelected()
 	
 	local $sNotifierRulesFilePath = ""
 	for $i = 1 to $g_aNotifierRulesFilePaths[0] step +1
@@ -765,11 +765,10 @@ func OnChange_NotifyRulesCombo()
 		$sNotifierRules &= $aNotifierRules[$i] & @CRLF
 	next
 
-	GUICtrlSetData($g_idNotifyEdit, $sNotifierRules)
+	Ui_SetNotifierText($sNotifierRules)
 
 	_GUI_Option("selectedNotifierRulesName", $sSelectedNofitierRules)
 	_GUI_Option("notify-text", $sNotifierRules)
-	OnChange_NotifyEdit()
 	$g_bNotifyCompile = True
 endfunc
 
@@ -787,7 +786,7 @@ func OnClick_NotifyNew()
 endfunc
 
 func OnClick_NotifyRename()
-	local $sOldNotifierRulesName = GUICtrlRead($g_idNotifyRulesCombo)
+	local $sOldNotifierRulesName = Ui_GetNotifyRulesSelected()
 	local $sNewNotifierRulesName = ""
 
 	if (not AskUserForNotifierRulesName($sNewNotifierRulesName, $sOldNotifierRulesName)) then
@@ -803,7 +802,7 @@ func OnClick_NotifyRename()
 endfunc
 
 func OnClick_NotifyDelete()
-	local $sSelectedNofitierRules = GUICtrlRead($g_idNotifyRulesCombo)
+	local $sSelectedNofitierRules = Ui_GetNotifyRulesSelected()
 
 	local $iMessageBoxResult = MsgBox(4, "Delete Notifier Rules?" ,"Are you sure you want to delete the notifier rules named '" & $sSelectedNofitierRules & "'?", 0, $g_hGUI)
 	if ($iMessageBoxResult == $IDNO) then
@@ -819,12 +818,11 @@ func OnClick_NotifyDelete()
 endfunc
 
 func OnClick_NotifySave()
-	SaveCurrentNotifierRulesToFile(GUICtrlRead($g_idNotifyRulesCombo))
+	SaveCurrentNotifierRulesToFile(Ui_GetNotifyRulesSelected())
 endfunc
 
 func OnClick_NotifyReset()
-	GUICtrlSetData($g_idNotifyEdit, _GUI_Option("notify-text"))
-	OnChange_NotifyEdit()
+	Ui_SetNotifierText(_GUI_Option("notify-text"))
 endfunc
 
 func OnClick_NotifyHelp()
@@ -884,14 +882,10 @@ func OnClick_NotifyHelp()
 endfunc
 
 func OnClick_NotifyDefault()
-	GUICtrlSetData($g_idNotifyEdit, $g_sNotifyTextDefault)
-	OnChange_NotifyEdit()
+	Ui_SetNotifierEdit($g_sNotifyTextDefault)
 endfunc
 
 func OnChange_NotifyEdit()
-	local $iState = _GUI_Option("notify-text") == GUICtrlRead($g_idNotifyEdit) ? $GUI_DISABLE : $GUI_ENABLE
-	GUICtrlSetState($g_idNotifySave, $iState)
-	GUICtrlSetState($g_idNotifyReset, $iState)
 endfunc
 
 func GetNotifierRulesName($sNotifierRulesFilePath)
@@ -903,11 +897,11 @@ func GetNotifierRulesFilePath($sNotifierRulesName)
 endfunc
 
 func SaveCurrentNotifierRulesToFile($sNotifierRulesName)
-	local $sNotifyEditContents = GUICtrlRead($g_idNotifyEdit)
+	local $sNotifyEditContents = Ui_GetNotifierText()
 	CreateNotifierRulesFile(GetNotifierRulesFilePath($sNotifierRulesName), $sNotifyEditContents)
 	_GUI_Option("selectedNotifierRulesName", $sNotifierRulesName)
 	_GUI_Option("notify-text", $sNotifyEditContents)
-	OnChange_NotifyEdit()
+	Ui_SetNotifierText($sNotifyEditContents)
 	$g_bNotifyCompile = True
 endfunc
 
@@ -991,7 +985,7 @@ func RefreshNotifyRulesCombo($sSelectedNotifierRulesName = "")
 		endif
 	next
 
-	GUICtrlSetData($g_idNotifyRulesCombo, $sComboData, $sDefaultSelectedNotifierRules)
+	Ui_SetNotifyRules(StringTrimLeft($sComboData, 1), $sDefaultSelectedNotifierRules)
 	OnChange_NotifyRulesCombo()
 endfunc
 
@@ -1028,61 +1022,12 @@ Func CheckGoblinHaveSeenBefore($id)
 EndFunc
 
 func Notifier_CreateTab()
-	local $iBottomButtonCoords = $g_iGUIHeight - 30
-	GUICtrlCreateTabItem("Notifier")
-	
-	local $iButtonWidth = 60
-	local $iControlMargin = 4
-	local $iComboWidth = $g_iGUIWidth - 3 * $iButtonWidth - 3 * $iControlMargin - 8
-
-	global $g_idNotifyRulesCombo = GUICtrlCreateCombo("", $iControlMargin, _GUI_LineY(0) + 1, $iComboWidth, 25, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
-	GUICtrlSetOnEvent(-1, "OnChange_NotifyRulesCombo")
-	global $g_idNotifyRulesNew = GUICtrlCreateButton("New", $iComboWidth + 2 * $iControlMargin, _GUI_LineY(0), $iButtonWidth, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_NotifyNew")
-	global $g_idNotifyRulesRename = GUICtrlCreateButton("Rename", $iComboWidth + $iButtonWidth + 3 * $iControlMargin, _GUI_LineY(0), $iButtonWidth, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_NotifyRename")
-	global $g_idNotifyRulesDelete = GUICtrlCreateButton("Delete", $iComboWidth + 2 * $iButtonWidth + 4 * $iControlMargin, _GUI_LineY(0), $iButtonWidth, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_NotifyDelete")
-
-	global $g_idNotifyEdit = GUICtrlCreateEdit("", 4, _GUI_LineY(2), $g_iGUIWidth - 8, $iBottomButtonCoords - _GUI_LineY(2) - 5)
-	GUICtrlSetResizing (-1, $GUI_DOCKAUTO)
-	GUICtrlSetLimit(-1, 2147483647)
-	
-	global $g_idNotifySave = GUICtrlCreateButton("Save", 4 + 0*62, $iBottomButtonCoords, 60, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_NotifySave")
-	; Add Ctrl + S as hotkey for saving notifier
-	local $avAccelKeys[][2] = [ ["^s", $g_idNotifySave] ]
-	GUISetAccelerators($avAccelKeys)
-
-	global $g_idNotifyReset = GUICtrlCreateButton("Reset", 4 + 1*62, $iBottomButtonCoords, 60, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_NotifyReset")
-
-	global $g_idNotifyTest = GUICtrlCreateButton("Help", 4 + 2*62, $iBottomButtonCoords, 60, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_NotifyHelp")
-
-	GUICtrlCreateButton("Default", 4 + 3*62, $iBottomButtonCoords, 60, 25)
-	GUICtrlSetOnEvent(-1, "OnClick_NotifyDefault")
-
-	OnClick_NotifyReset()
 	RefreshNotifyRulesCombo(_GUI_Option("selectedNotifierRulesName"))
 endfunc
 
 func Notifier_CreateSoundsTab()
-	GUICtrlCreateTabItem("Sounds")
+	local $i
 	for $i = 0 to $g_iNumSounds - 1
-		local $iLine = 1 + $i*2
-
-		local $id = GUICtrlCreateSlider(60, _GUI_LineY($iLine), $g_iGUIWidth-128, 25, BitOR($TBS_TOOLTIPS, $TBS_AUTOTICKS, $TBS_ENABLESELRANGE))
-		GUICtrlSetLimit(-1, 10, 0)
-		GUICtrlSetOnEvent(-1, "OnChange_VolumeSlider")
-			_GUICtrlSlider_SetTicFreq($id, 1)
-
-		_GUI_NewTextBasic($iLine, "Sound " & ($i + 1), False)
-
-		GUICtrlCreateButton("Test", $g_iGUIWidth-68, _GUI_LineY($iLine), 60, 25)
-		GUICtrlSetOnEvent(-1, "OnClick_VolumeTest")
-	
-		if ($i == 0) then $g_idVolumeSlider = $id
 		_GUI_Volume($i, 5)
 	next
 	LoadGUIVolume()
