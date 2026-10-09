@@ -783,11 +783,17 @@ LRESULT CALLBACK OverlayWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 }
 
 LRESULT CALLBACK DiffWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	ImGuiContext* prev = ImGui::GetCurrentContext();
 	if (g.diffCtx) {
 		ImGui::SetCurrentContext(g.diffCtx);
-		if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+		if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) {
+			if (prev)
+				ImGui::SetCurrentContext(prev);
 			return true;
+		}
 	}
+	LRESULT result = 0;
+	bool handled = true;
 	switch (msg) {
 	case WM_SIZE:
 		if (g.device && g.diffSwap && wParam != SIZE_MINIMIZED) {
@@ -800,21 +806,26 @@ LRESULT CALLBACK DiffWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 				CreateDiffRenderTarget();
 			}
 		}
-		return 0;
+		break;
 	case WM_CLOSE:
 		g.showDiff = false;
-		ShowWindow(hWnd, SW_HIDE);
-		return 0;
+		break;
 	case WM_DESTROY:
-		return 0;
+		break;
 	case WM_SYSCOMMAND:
 		if ((wParam & 0xfff0) == SC_KEYMENU)
-			return 0;
+			break;
+		handled = false;
 		break;
 	default:
+		handled = false;
 		break;
 	}
-	return DefWindowProcW(hWnd, msg, wParam, lParam);
+	if (!handled)
+		result = DefWindowProcW(hWnd, msg, wParam, lParam);
+	if (prev)
+		ImGui::SetCurrentContext(prev);
+	return result;
 }
 
 void DrawBottomBar() {
@@ -1055,11 +1066,8 @@ void DrawDiffWindow() {
 		ImGui::EndTable();
 	}
 	ImGui::EndChild();
-	if (ImGui::Button("Close", ImVec2(100, 0))) {
+	if (ImGui::Button("Close", ImVec2(100, 0)))
 		g.showDiff = false;
-		if (g.diffHwnd)
-			ShowWindow(g.diffHwnd, SW_HIDE);
-	}
 	ImGui::End();
 }
 
@@ -1124,6 +1132,8 @@ void PresentDiff() {
 	if (!g.showDiff) {
 		if (g.diffHwnd && IsWindowVisible(g.diffHwnd))
 			ShowWindow(g.diffHwnd, SW_HIDE);
+		if (g.mainCtx)
+			ImGui::SetCurrentContext(g.mainCtx);
 		return;
 	}
 	if (!g.diffHwnd || !g.diffCtx || !g.diffRtv || !g.diffSwap) {
@@ -1133,6 +1143,10 @@ void PresentDiff() {
 	if (!g.diffCtx || !g.diffRtv || !g.diffSwap)
 		return;
 	if (IsIconic(g.diffHwnd))
+		return;
+	RECT crc{};
+	GetClientRect(g.diffHwnd, &crc);
+	if (crc.right - crc.left < 1 || crc.bottom - crc.top < 1)
 		return;
 
 	ImGui::SetCurrentContext(g.diffCtx);
@@ -1149,6 +1163,8 @@ void PresentDiff() {
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 	g.diffSwap->Present(0, 0);
 
+	if (!g.showDiff && g.diffHwnd)
+		ShowWindow(g.diffHwnd, SW_HIDE);
 	if (g.mainCtx)
 		ImGui::SetCurrentContext(g.mainCtx);
 }
