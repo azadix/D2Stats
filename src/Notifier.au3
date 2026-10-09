@@ -25,7 +25,7 @@ global $g_bNotifyCache = True
 global $g_bNotifyCompile = True
 global $g_bNotifierChanged = False
 
-global $g_goblinIds = [2774, 2775, 2776, 2779, 2780, 2781, 2784, 2785, 2786, 2787, 2788, 2789, 2790, 2791, 2792, 2793, 2794, 2795, 2799, 2802, 2803, 2805]
+global $g_goblinIds = [2774, 2775, 2776, 2777, 2779, 2780, 2781, 2782, 2783, 2784, 2785, 2786, 2787, 2788, 2789, 2790, 2791, 2792, 2793, 2794, 2795]
 global $g_goblinBuffer[] = []
 #EndRegion
 

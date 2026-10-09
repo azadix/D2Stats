@@ -160,7 +160,7 @@ func FixStats() ; This game is stupid
 	$g_aiStatsCache[1][74] = $g_aiStatsCache[1][74] / 10 ;Life regen
 	
 	local $pSkillsTxt = _MemoryRead($g_pD2sgpt + 0xB98, $g_ahD2Handle)
-	local $iSkillID, $pStats, $iStatCount, $pSkill, $iStatIndex, $iStatValue, $iOwnerType, $iStateID
+	local $iSkillID, $pStats, $iStatCount, $pSkill, $iStatIndex, $iStatValue, $iOwnerType, $pNext
 
 	local $pItemTypesTxt = _MemoryRead($g_pD2sgpt + 0xBF8, $g_ahD2Handle)
 	local $pItemsTxt = _MemoryRead($g_hD2Common + 0x9FB98, $g_ahD2Handle)
@@ -176,7 +176,7 @@ func FixStats() ; This game is stupid
 		$iOwnerType = _MemoryRead($pStatList + 0x08, $g_ahD2Handle)
 		$pStats = _MemoryRead($pStatList + 0x24, $g_ahD2Handle)
 		$iStatCount = _MemoryRead($pStatList + 0x28, $g_ahD2Handle, "word")
-		$pStatList = _MemoryRead($pStatList + 0x2C, $g_ahD2Handle)
+		$pNext = _MemoryRead($pStatList + 0x2C, $g_ahD2Handle)
 
 		$iSkillID = 0
 
@@ -188,13 +188,10 @@ func FixStats() ; This game is stupid
 			if ($iOwnerType == 4 and $iStatIndex == 67) then $g_aiStatsCache[1][$iStatIndex] += $iStatValue ; Armor FRW penalty
 		next
 
-		if ($iOwnerType == 4) then continueloop
-
-		$iStateID = _MemoryRead($pStatList + 0x14, $g_ahD2Handle)
-		switch $iStateID
-			case 195 ; Dark Power, Tome of Possession aura
-				$iSkillID = 687 ; Dark Power
-		endswitch
+		if ($iOwnerType == 4) then
+			$pStatList = $pNext
+			continueloop
+		endif
 
 		local $bHasVelocity[3] = [False,False,False]
 		if ($iSkillID) then ; Game doesn't even bother setting the skill id for some skills, so we'll just have to hope the state is correct or the stat list isn't lying...
@@ -259,6 +256,8 @@ func FixStats() ; This game is stupid
 					if ($bApply) then $g_aiStatsCache[1][343] += $iStatValue
 			endswitch
 		next
+
+		$pStatList = $pNext
 	wend
 endfunc
 
