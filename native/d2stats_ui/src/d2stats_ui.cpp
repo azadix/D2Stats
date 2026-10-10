@@ -218,7 +218,7 @@ struct App {
 	ScTable scTables[4];
 
 	std::vector<OverlayLine> overlayLines;
-	int theme = 0; // 0 Cherry, 1 Dark, 2 Light
+	int theme = 2; // 0 Cherry, 1 Dark, 2 Light (default)
 
 	void PushEvent(int type, int i0 = 0, int i1 = 0, int i2 = 0, const char* key = nullptr, const char* text = nullptr) {
 		D2UiEvent e{};
@@ -325,8 +325,8 @@ void ApplyThemeAllContexts() {
 
 void LoadTheme() {
 	wchar_t buf[32]{};
-	GetPrivateProfileStringW(L"UI", L"Theme", L"Cherry", buf, 32, UiIniPath().c_str());
-	g.theme = kThemeCherry;
+	GetPrivateProfileStringW(L"UI", L"Theme", L"Light", buf, 32, UiIniPath().c_str());
+	g.theme = kThemeLight;
 	for (int i = 0; i < IM_ARRAYSIZE(ThemeNames); ++i) {
 		if (_wcsicmp(buf, Utf8ToWide(ThemeNames[i]).c_str()) == 0) {
 			g.theme = i;
