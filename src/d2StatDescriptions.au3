@@ -27,7 +27,7 @@ global $g_d2StatNames[][5] = [ _
 		[22, "", True, "+# to Maximum 1-handed damage", True], _
 		[23, "", True, "+# to Minimum 2-handed damage", True], _
 		[24, "", True, "+# to Maximum 2-handed damage", True], _
-		[25, "", True, "+#% to Enhanced Weapon Damage", True], _
+		[25, "", True, "+#% to Enhanced Weapon Damage (Weapon Physical Damage)", True], _
 		[26, "", True, "", True], _
 		[27, "", True, "Regenerate Mana #%", True], _
 		[28, "", True, "Heal Stamina #%", True], _
@@ -116,7 +116,7 @@ global $g_d2StatNames[][5] = [ _
 		[111, "", True, "Damage +#", True], _
 		[112, "", True, "Hit Causes Monsters to Flee #%", True], _
 		[113, "", True, "Hit Blinds Target +#", True], _
-		[114, "", True, "#% Damage Taken Goes to Mana", True], _
+		[114, "", True, "#% Damage Taken Goes to Mana (Weapon Damage Taken Restores Mana)", True], _
 		[115, "", True, "Ignore Target Defense", True], _
 		[116, "", True, "#% Target Defense", True], _
 		[117, "", True, "Prevent Monster Heal", True], _
@@ -277,8 +277,8 @@ global $g_d2StatNames[][5] = [ _
 		[272, "", True, "", True], _
 		[273, "", True, "#% Chance to Crush attacker", True], _
 		[274, "", True, "", True], _
-		[275, "", True, "Cannot be Disenchanted", True], _
-		[276, "", True, "Stun Attack amount", True], _
+		[275, "", True, "", True], _
+		[276, "", True, "Cannot be Disenchanted", True], _
 		[277, "", True, "Area Effect Attack amount", True], _
 		[278, "", True, "Strength Factor +#", True], _
 		[279, "", True, "Lion Stance damage bonus", True], _
@@ -360,7 +360,7 @@ global $g_d2StatNames[][5] = [ _
 		[355, "", True, "", True], _
 		[356, "", True, "Charms (amount * 2) (for explanation see 'Basic' tab)", True], _
 		[357, "", True, "+#% to Physical/Magic spell damage", True], _
-		[358, "", True, "-#% To Enemy Physical/Magic Resistance", True], _
+		[358, "", True, "-#% to Enemy Magic Resistance", True], _
 		[359, "", True, "Strength +#%", True], _
 		[360, "", True, "Dexterity +#%", True], _
 		[361, "", True, "Energy +#%", True], _
