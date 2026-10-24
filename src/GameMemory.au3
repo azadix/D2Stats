@@ -44,7 +44,7 @@ func UpdateHandle()
 	$g_ahD2Handle = _MemoryOpen($iPID)
 	if (@error) then return _Debug("UpdateHandle", "Couldn't open Diablo II memory handle.")
 
-	if (not UpdateDllHandles()) then
+	if (not UpdateDllHandles($iPID)) then
 		_CloseHandle()
 		return _Debug("UpdateHandle", "Couldn't update dll handles.")
 	endif
@@ -477,32 +477,207 @@ func ReadHoverText()
 	return _MemoryPointerRead($g_hD2Win + 0x1191F, $g_ahD2Handle, $aiOffsets, StringFormat("wchar[%s]", $g_iHoverTextWChars))
 endfunc
 
-func UpdateDllHandles()
-	local $pLoadLibraryA = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "LoadLibraryA")
-	if (not $pLoadLibraryA) then return _Debug("UpdateDllHandles", "Couldn't retrieve LoadLibraryA address.")
+; Match "D2Client.dll" against Toolhelp/psapi names (Wine may differ in case/path).
+func ModuleNameEquals($sName, $sWanted)
+	if ($sName == "" or $sWanted == "") then return False
+	local $sBase = $sName
+	local $iSlash = StringInStr($sName, "\", 0, -1)
+	if ($iSlash) then $sBase = StringMid($sName, $iSlash + 1)
+	local $iSlashFwd = StringInStr($sBase, "/", 0, -1)
+	if ($iSlashFwd) then $sBase = StringMid($sBase, $iSlashFwd + 1)
+	return StringCompare($sBase, $sWanted, 0) == 0
+endfunc
 
-	local $pAllocAddress = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
-	if (@error) then return _Debug("UpdateDllHandles", "Failed to allocate memory.")
-
-	local $iDLLs = UBound($g_asDLL)
-	local $hDLLHandle[$iDLLs]
-	local $bFailed = False
-
-	for $i = 0 to $iDLLs - 1
-		_MemoryWrite($pAllocAddress, $g_ahD2Handle, $g_asDLL[$i], StringFormat("char[%s]", StringLen($g_asDLL[$i]) + 1))
-		$hDLLHandle[$i] = RemoteThread($pLoadLibraryA, $pAllocAddress)
-		if ($hDLLHandle[$i] == 0) then $bFailed = True
+func DllBasesRequiredReady(ByRef $hDLLHandle)
+	local $i
+	for $i = 0 to UBound($hDLLHandle) - 1
+		if ($hDLLHandle[$i] == 0) then return False
 	next
+	return True
+endfunc
 
+func ApplyDllBases(ByRef $hDLLHandle, $hGameExe, $sHow)
 	$g_hD2Client = $hDLLHandle[0]
 	$g_hD2Common = $hDLLHandle[1]
 	$g_hD2Win = $hDLLHandle[2]
 	$g_hD2Lang = $hDLLHandle[3]
 	$g_hD2Sigma = $hDLLHandle[4]
+	$g_hGameExe = $hGameExe
+	_Log("UpdateDllHandles", "Resolved via " & $sHow & ".", 0, 0)
+	return True
+endfunc
 
-	$g_hGameExe = 0
+func NoteDllBase(ByRef $hDLLHandle, ByRef $hGameExe, $sMod, $pBase)
+	if (not $pBase) then return
+	if (not $hGameExe) then $hGameExe = $pBase
+	if (ModuleNameEquals($sMod, "Game.exe")) then $hGameExe = $pBase
+	local $i
+	for $i = 0 to UBound($g_asDLL) - 1
+		if ($hDLLHandle[$i] == 0 and ModuleNameEquals($sMod, $g_asDLL[$i])) then
+			$hDLLHandle[$i] = $pBase
+			return
+		endif
+	next
+endfunc
+
+; Read the target PEB module list. CreateRemoteThread+LoadLibraryA often returns 0
+; under Wine/Proton WoW64 even when the DLLs are already loaded (d2launcher default).
+func FillDllBasesViaToolhelp($iPID, ByRef $hDLLHandle, ByRef $hGameExe)
+	if (not $iPID) then return False
+
+	local const $TH32CS_SNAPMODULE = 0x00000008
+	local const $TH32CS_SNAPMODULE32 = 0x00000010
+	local const $INVALID_HANDLE_VALUE = Ptr(-1)
+	; MODULEENTRY32 (ANSI, 32-bit)
+	local const $tagMODULEENTRY32 = "dword dwSize;dword th32ModuleID;dword th32ProcessID;dword GlblcntUsage;dword ProccntUsage;ptr modBaseAddr;dword modBaseSize;handle hModule;char szModule[256];char szExePath[260]"
+
+	local $iPass, $iFlags, $aSnap, $hSnap, $tMe, $aFirst, $aNext, $sMod, $pBase
+	; SNAPMODULE32 is a no-op for a 32-bit caller on Windows; Wine WoW64 may need it.
+	for $iPass = 0 to 1
+		if ($iPass == 0) then
+			$iFlags = $TH32CS_SNAPMODULE
+		else
+			$iFlags = BitOR($TH32CS_SNAPMODULE, $TH32CS_SNAPMODULE32)
+		endif
+		$aSnap = DllCall("kernel32.dll", "handle", "CreateToolhelp32Snapshot", "dword", $iFlags, "dword", $iPID)
+		if (@error or not IsArray($aSnap) or $aSnap[0] = 0 or $aSnap[0] = $INVALID_HANDLE_VALUE) then continueloop
+
+		$hSnap = $aSnap[0]
+		$tMe = DllStructCreate($tagMODULEENTRY32)
+		DllStructSetData($tMe, "dwSize", DllStructGetSize($tMe))
+
+		$aFirst = DllCall("kernel32.dll", "bool", "Module32First", "handle", $hSnap, "struct*", $tMe)
+		if (not @error and IsArray($aFirst) and $aFirst[0]) then
+			while 1
+				$sMod = DllStructGetData($tMe, "szModule")
+				if ($sMod == "") then $sMod = DllStructGetData($tMe, "szExePath")
+				$pBase = DllStructGetData($tMe, "modBaseAddr")
+				if (not $pBase) then $pBase = DllStructGetData($tMe, "hModule")
+				NoteDllBase($hDLLHandle, $hGameExe, $sMod, $pBase)
+
+				$aNext = DllCall("kernel32.dll", "bool", "Module32Next", "handle", $hSnap, "struct*", $tMe)
+				if (@error or not IsArray($aNext) or not $aNext[0]) then exitloop
+			wend
+		endif
+
+		DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hSnap)
+		if (DllBasesRequiredReady($hDLLHandle)) then return True
+	next
+
+	return False
+endfunc
+
+func FillDllBasesViaEnumProcessModules(ByRef $hDLLHandle, ByRef $hGameExe)
+	if (not $g_ahD2Handle) then return False
+
+	local $hProcess = $g_ahD2Handle[1]
+	; Wine can reject a null size probe; ask for a large list up front.
+	local $tMods = DllStructCreate("ptr[1024]")
+	local $aEnum = DllCall("psapi.dll", "bool", "EnumProcessModules", "handle", $hProcess, "struct*", $tMods, "dword", DllStructGetSize($tMods), "dword*", 0)
+	if (@error or not IsArray($aEnum) or not $aEnum[0]) then
+		$aEnum = DllCall(@SystemDir & "\psapi.dll", "bool", "EnumProcessModules", "handle", $hProcess, "struct*", $tMods, "dword", DllStructGetSize($tMods), "dword*", 0)
+	endif
+	if (@error or not IsArray($aEnum) or not $aEnum[0] or $aEnum[4] < 4) then return False
+
+	local $iCount = Int($aEnum[4] / 4)
+	if ($iCount > 1024) then $iCount = 1024
+	local $j, $hMod, $sMod, $aName
+
+	for $j = 1 to $iCount
+		$hMod = DllStructGetData($tMods, 1, $j)
+		if (not $hMod) then continueloop
+
+		$sMod = ""
+		$aName = DllCall("psapi.dll", "dword", "GetModuleBaseNameW", "handle", $hProcess, "handle", $hMod, "wstr", "", "dword", 260)
+		if (@error or not IsArray($aName) or not $aName[0]) then
+			$aName = DllCall(@SystemDir & "\psapi.dll", "dword", "GetModuleBaseNameW", "handle", $hProcess, "handle", $hMod, "wstr", "", "dword", 260)
+		endif
+		if (not @error and IsArray($aName) and $aName[0]) then $sMod = $aName[3]
+		if ($sMod == "") then
+			$aName = DllCall("psapi.dll", "dword", "GetModuleFileNameExW", "handle", $hProcess, "handle", $hMod, "wstr", "", "dword", 260)
+			if (not @error and IsArray($aName) and $aName[0]) then $sMod = $aName[3]
+		endif
+
+		NoteDllBase($hDLLHandle, $hGameExe, $sMod, $hMod)
+	next
+
+	return DllBasesRequiredReady($hDLLHandle)
+endfunc
+
+func FillDllBasesViaRemoteLoadLibrary(ByRef $hDLLHandle, ByRef $hGameExe)
+	local $pLoadLibraryA = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "LoadLibraryA")
+	if (not $pLoadLibraryA) then return False
+
 	local $pGetModuleHandleA = _WinAPI_GetProcAddress(_WinAPI_GetModuleHandle("kernel32.dll"), "GetModuleHandleA")
-	if ($pGetModuleHandleA) then $g_hGameExe = RemoteThread($pGetModuleHandleA, 0)
+	local $pAllocAddress = _MemVirtualAllocEx($g_ahD2Handle[1], 0, 0x100, BitOR($MEM_COMMIT, $MEM_RESERVE), $PAGE_EXECUTE_READWRITE)
+	if (@error or not $pAllocAddress) then return False
+
+	local $i, $hMod
+	for $i = 0 to UBound($g_asDLL) - 1
+		if ($hDLLHandle[$i]) then continueloop
+		_MemoryWrite($pAllocAddress, $g_ahD2Handle, $g_asDLL[$i], StringFormat("char[%s]", StringLen($g_asDLL[$i]) + 1))
+		$hMod = 0
+		if ($pGetModuleHandleA) then $hMod = RemoteThread($pGetModuleHandleA, $pAllocAddress)
+		if ($hMod == 0) then $hMod = RemoteThread($pLoadLibraryA, $pAllocAddress)
+		if ($hMod) then
+			$hDLLHandle[$i] = $hMod
+		else
+			_Log("UpdateDllHandles", "LoadLibrary/GetModuleHandle in game process failed for: " & $g_asDLL[$i], 0, 0)
+		endif
+	next
+
+	if (not $hGameExe and $pGetModuleHandleA) then $hGameExe = RemoteThread($pGetModuleHandleA, 0)
+
+	_MemVirtualFreeEx($g_ahD2Handle[1], $pAllocAddress, 0x100, $MEM_RELEASE)
+	return DllBasesRequiredReady($hDLLHandle)
+endfunc
+
+func MissingDllNames(ByRef $hDLLHandle)
+	local $sMiss = ""
+	local $i
+	for $i = 0 to UBound($hDLLHandle) - 1
+		if ($hDLLHandle[$i] == 0) then
+			if ($sMiss <> "") then $sMiss &= ", "
+			$sMiss &= $g_asDLL[$i]
+		endif
+	next
+	return $sMiss
+endfunc
+
+func UpdateDllHandles($iPID = 0)
+	if (not $iPID) then $iPID = $g_iD2pid
+
+	local $iDLLs = UBound($g_asDLL)
+	local $hDLLHandle[$iDLLs]
+	local $hGameExe = 0
+	local $i, $iTry
+	for $i = 0 to $iDLLs - 1
+		$hDLLHandle[$i] = 0
+	next
+
+	; Wine/Linux (d2launcher Proton WoW64): enumerate loaded modules; do not trust
+	; the remote LoadLibrary thread exit code as an HMODULE.
+	for $iTry = 1 to 8
+		if (FillDllBasesViaToolhelp($iPID, $hDLLHandle, $hGameExe)) then
+			ApplyDllBases($hDLLHandle, $hGameExe, "toolhelp")
+			exitloop
+		endif
+		if (FillDllBasesViaEnumProcessModules($hDLLHandle, $hGameExe)) then
+			ApplyDllBases($hDLLHandle, $hGameExe, "psapi")
+			exitloop
+		endif
+		Sleep(50)
+	next
+
+	if (not DllBasesRequiredReady($hDLLHandle)) then
+		if (FillDllBasesViaRemoteLoadLibrary($hDLLHandle, $hGameExe)) then
+			ApplyDllBases($hDLLHandle, $hGameExe, "remote LoadLibrary")
+		endif
+	endif
+
+	if (not DllBasesRequiredReady($hDLLHandle)) then
+		return _Debug("UpdateDllHandles", "Couldn't retrieve dll addresses. Missing: " & MissingDllNames($hDLLHandle))
+	endif
 
 	local $pD2Inject = $g_hD2Client + 0xCDE00
 	$g_pD2InjectPrint = $pD2Inject + 0x01 ; memory alignment
@@ -521,10 +696,6 @@ func UpdateDllHandles()
 	if ($g_pHoverTextBuffer) then _MemoryWrite($g_pHoverTextBuffer, $g_ahD2Handle, 0, StringFormat("byte[%s]", $g_iHoverTextBytes))
 
 	$g_pD2sgpt = _MemoryRead($g_hD2Common + 0x99E1C, $g_ahD2Handle)
-
-	_MemVirtualFreeEx($g_ahD2Handle[1], $pAllocAddress, 0x100, $MEM_RELEASE)
-	if (@error) then return _Debug("UpdateDllHandles", "Failed to free memory.")
-	if ($bFailed) then return _Debug("UpdateDllHandles", "Couldn't retrieve dll addresses.")
 
 	return True
 endfunc
