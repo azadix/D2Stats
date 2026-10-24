@@ -34,6 +34,7 @@ global const $D2UI_EVT_SC_COMBO = 23
 global const $D2UI_EVT_SC_INPUT = 24
 global const $D2UI_EVT_SC_CHECK = 25
 global const $D2UI_EVT_HOTKEY = 26
+global const $D2UI_EVT_NOTIFIER_COLOR = 27
 global $g_aiVolume[6] = [5, 5, 5, 5, 5, 5]
 global $g_sCompareFilter = ""
 #EndRegion
@@ -134,8 +135,19 @@ func Ui_ClearOptions()
 	DllCall($g_hUiDll, "none", "D2Ui_ClearOptions")
 endfunc
 
-func Ui_AddOption($iGroup, $sKey, $sType, $sLabel, $iInt, $sStr)
-	DllCall($g_hUiDll, "none", "D2Ui_AddOption", "int", $iGroup, "wstr", $sKey, "wstr", $sType, "wstr", $sLabel, "int", $iInt, "wstr", $sStr)
+func Ui_AddOption($iGroup, $sKey, $sType, $sLabel, $iInt, $sStr, $sSection = "")
+	DllCall($g_hUiDll, "none", "D2Ui_AddOption", "int", $iGroup, "wstr", $sKey, "wstr", $sType, "wstr", $sLabel, "int", $iInt, "wstr", $sStr, "wstr", $sSection)
+endfunc
+
+func Ui_SetNotifierColor($iIndex, $iColor)
+	DllCall($g_hUiDll, "none", "D2Ui_SetNotifierColor", "int", $iIndex, "dword", $iColor)
+endfunc
+
+func Ui_PushNotifierColors()
+	local $i
+	for $i = 0 to 11
+		Ui_SetNotifierColor($i, $g_NotifierColorArray[$i])
+	next
 endfunc
 
 func Ui_SetOptionChoices($sKey, $sPipe)
@@ -246,11 +258,11 @@ func Ui_PushOptions()
 	Ui_ClearOptions()
 	local $i
 	for $i = 0 to $g_iGUIOptionsGeneral - 1
-		Ui_AddOption(0, $g_avGUIOptionList[$i][0], $g_avGUIOptionList[$i][2], $g_avGUIOptionList[$i][3], Int($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][1]))
+		Ui_AddOption(0, $g_avGUIOptionList[$i][0], $g_avGUIOptionList[$i][2], $g_avGUIOptionList[$i][3], Int($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][5]))
 	next
 	local $iEnd = $g_iGUIOptionsGeneral + $g_iGUIOptionsHotkey - 1
 	for $i = $g_iGUIOptionsGeneral to $iEnd
-		Ui_AddOption(1, $g_avGUIOptionList[$i][0], $g_avGUIOptionList[$i][2], $g_avGUIOptionList[$i][3], Int($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][1]))
+		Ui_AddOption(1, $g_avGUIOptionList[$i][0], $g_avGUIOptionList[$i][2], $g_avGUIOptionList[$i][3], Int($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][5]))
 	next
 	Ui_SetOptionChoices("overlay-font", _ArrayToString(OverlayGetMonospaceFonts(), "|"))
 endfunc
@@ -348,6 +360,8 @@ func Ui_DrainEvents()
 				SaveGUIVolume()
 			case $D2UI_EVT_VOLUME_TEST
 				NotifierPlaySound($i0)
+			case $D2UI_EVT_NOTIFIER_COLOR
+				SetNotifierColor($i0, $i1)
 			case $D2UI_EVT_FORUM
 				OnClick_Forum()
 			case $D2UI_EVT_COMPARE_FILTER

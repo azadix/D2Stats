@@ -18,6 +18,7 @@ EXPORTS
 	D2Ui_SetMercenary
 	D2Ui_ClearOptions
 	D2Ui_AddOption
+	D2Ui_SetNotifierColor
 	D2Ui_SetOptionChoices
 	D2Ui_SetOptionInt
 	D2Ui_SetOptionStr

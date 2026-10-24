@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <map>
 #include <string>
 #include <string.h>
 #include <vector>
@@ -126,6 +127,7 @@ struct OptionItem {
 	std::string key;
 	std::string type;
 	std::string label;
+	std::string section;
 	int intValue = 0;
 	std::string strValue;
 	std::vector<std::string> choices;
@@ -202,6 +204,10 @@ struct App {
 	std::string notifySaved;
 	std::vector<char> notifyEdit;
 	int volumes[6] = {5, 5, 5, 5, 5, 5};
+	unsigned notifierColors[12] = {
+		0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0xF0CD8C, 0x9D9D9D,
+		0x000000, 0xFF00FF, 0xFFBF00, 0xFFFF00, 0x008000, 0x9D00FF
+	};
 
 	std::string compareFilter;
 	std::vector<CompareItem> compareItems;
@@ -219,6 +225,7 @@ struct App {
 
 	std::vector<OverlayLine> overlayLines;
 	int theme = 2; // 0 Cherry, 1 Dark, 2 Light (default)
+	std::map<std::string, bool> sectionOpen;
 
 	void PushEvent(int type, int i0 = 0, int i1 = 0, int i2 = 0, const char* key = nullptr, const char* text = nullptr) {
 		D2UiEvent e{};
@@ -247,6 +254,35 @@ App g;
 enum UiTheme { kThemeCherry = 0, kThemeDark = 1, kThemeLight = 2 };
 
 const char* ThemeNames[] = {"Cherry", "Dark", "Light"};
+
+const unsigned kDefaultNotifierColors[12] = {
+	0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0xF0CD8C, 0x9D9D9D,
+	0x000000, 0xFF00FF, 0xFFBF00, 0xFFFF00, 0x008000, 0x9D00FF
+};
+
+const char* kNotifierColorNames[12] = {
+	"White", "Red", "Lime", "Blue", "Gold", "Grey",
+	"Black", "Pink", "Orange", "Yellow", "Green", "Purple"
+};
+
+unsigned PackRgb(const float col[3]) {
+	int r = static_cast<int>(col[0] * 255.0f + 0.5f);
+	int g = static_cast<int>(col[1] * 255.0f + 0.5f);
+	int b = static_cast<int>(col[2] * 255.0f + 0.5f);
+	if (r < 0) r = 0;
+	if (g < 0) g = 0;
+	if (b < 0) b = 0;
+	if (r > 255) r = 255;
+	if (g > 255) g = 255;
+	if (b > 255) b = 255;
+	return (static_cast<unsigned>(r) << 16) | (static_cast<unsigned>(g) << 8) | static_cast<unsigned>(b);
+}
+
+void UnpackRgb(unsigned rgb, float col[3]) {
+	col[0] = ((rgb >> 16) & 0xFF) / 255.0f;
+	col[1] = ((rgb >> 8) & 0xFF) / 255.0f;
+	col[2] = (rgb & 0xFF) / 255.0f;
+}
 
 std::wstring UiIniPath() {
 	wchar_t path[MAX_PATH]{};
@@ -337,6 +373,44 @@ void LoadTheme() {
 
 void SaveTheme() {
 	WritePrivateProfileStringW(L"UI", L"Theme", Utf8ToWide(ThemeNames[g.theme]).c_str(), UiIniPath().c_str());
+}
+
+const char* kOptionsSectionNames[] = {
+	"General", "Notifier", "Notification colors", "Overlay", "Sounds", "Hotkeys"
+};
+
+std::wstring SectionIniKey(const char* name) {
+	return std::wstring(L"Section.") + Utf8ToWide(name);
+}
+
+bool GetSectionOpen(const char* name) {
+	auto it = g.sectionOpen.find(name);
+	if (it != g.sectionOpen.end())
+		return it->second;
+	return true;
+}
+
+void SaveSectionOpen(const char* name, bool open) {
+	g.sectionOpen[name] = open;
+	WritePrivateProfileStringW(L"UI", SectionIniKey(name).c_str(), open ? L"1" : L"0", UiIniPath().c_str());
+}
+
+void LoadSectionOpen() {
+	std::wstring ini = UiIniPath();
+	for (const char* name : kOptionsSectionNames) {
+		wchar_t buf[8]{};
+		GetPrivateProfileStringW(L"UI", SectionIniKey(name).c_str(), L"1", buf, 8, ini.c_str());
+		g.sectionOpen[name] = (buf[0] != L'0');
+	}
+}
+
+bool OptionsSectionHeader(const char* name) {
+	bool open = GetSectionOpen(name);
+	ImGui::SetNextItemOpen(open);
+	bool now = ImGui::CollapsingHeader(name);
+	if (now != open)
+		SaveSectionOpen(name, now);
+	return now;
 }
 
 void DrawThemeSwitcher() {
@@ -892,56 +966,123 @@ void DrawStatsTab(int tab) {
 	}
 }
 
-void DrawOptions(int group) {
-	if (group == 0) {
-		DrawThemeSwitcher();
-		ImGui::Separator();
+void DrawOptionRow(OptionItem& o, size_t index) {
+	ImGui::PushID(o.key.c_str());
+	if (o.type == "cb") {
+		bool v = o.intValue != 0;
+		if (ImGui::Checkbox(o.label.c_str(), &v)) {
+			o.intValue = v ? 1 : 0;
+			g.PushEvent(D2UI_EVT_OPTION, o.intValue, 0, 0, o.key.c_str(), nullptr);
+		}
+	} else if (o.type == "int") {
+		int v = o.intValue;
+		ImGui::SetNextItemWidth(140);
+		if (ImGui::InputInt("##int", &v, 1, 10)) {
+			o.intValue = v;
+			g.PushEvent(D2UI_EVT_OPTION, o.intValue, 0, 0, o.key.c_str(), nullptr);
+		}
+		ImGui::SameLine();
+		ImGui::TextUnformatted(o.label.c_str());
+	} else if (o.type == "str") {
+		int idx = IndexOf(o.choices, o.strValue);
+		ImGui::SetNextItemWidth(220);
+		if (!o.choices.empty() && ImGui::BeginCombo("##str", o.strValue.c_str())) {
+			for (int c = 0; c < static_cast<int>(o.choices.size()); ++c) {
+				bool sel = (c == idx);
+				if (ImGui::Selectable(o.choices[static_cast<size_t>(c)].c_str(), sel)) {
+					o.strValue = o.choices[static_cast<size_t>(c)];
+					g.PushEvent(D2UI_EVT_OPTION, 0, 0, 0, o.key.c_str(), o.strValue.c_str());
+				}
+				if (sel)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::SameLine();
+		ImGui::TextUnformatted(o.label.c_str());
+	} else if (o.type == "hk") {
+		std::string label = (g.capturingHotkey == static_cast<int>(index)) ? "Press a key (ESC disables)" : HotkeyLabel(o.intValue);
+		if (ImGui::Button(label.c_str(), ImVec2(220, 0)))
+			g.capturingHotkey = static_cast<int>(index);
+		ImGui::SameLine();
+		ImGui::TextUnformatted(o.label.c_str());
 	}
+	ImGui::PopID();
+}
+
+void DrawNotifierColors() {
+	const float previewH = ImGui::GetTextLineHeightWithSpacing() * 3.6f;
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.85f));
+	ImGui::BeginChild("color_preview", ImVec2(0, previewH), ImGuiChildFlags_Borders);
+	ImGui::TextColored(RgbToVec(static_cast<int>(g.notifierColors[4])), "Unique Ring");
+	ImGui::TextColored(RgbToVec(static_cast<int>(g.notifierColors[9])), "Rare Circlet");
+	ImGui::TextColored(RgbToVec(static_cast<int>(g.notifierColors[3])), "Magic Jewel");
+	ImGui::EndChild();
+	ImGui::PopStyleColor();
+
+	for (int i = 0; i < 12; ++i) {
+		ImGui::PushID(i);
+		float col[3];
+		UnpackRgb(g.notifierColors[i], col);
+		ImGui::SetNextItemWidth(180);
+		if (ImGui::ColorEdit3("##c", col, ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_DisplayHex)) {
+			g.notifierColors[i] = PackRgb(col);
+			g.PushEvent(D2UI_EVT_NOTIFIER_COLOR, i, static_cast<int>(g.notifierColors[i]));
+		}
+		ImGui::SameLine();
+		ImGui::TextColored(RgbToVec(static_cast<int>(g.notifierColors[i])), "%s", kNotifierColorNames[i]);
+		ImGui::PopID();
+	}
+	if (ImGui::Button("Reset colors to defaults")) {
+		for (int i = 0; i < 12; ++i) {
+			if (g.notifierColors[i] == kDefaultNotifierColors[i])
+				continue;
+			g.notifierColors[i] = kDefaultNotifierColors[i];
+			g.PushEvent(D2UI_EVT_NOTIFIER_COLOR, i, static_cast<int>(g.notifierColors[i]));
+		}
+	}
+}
+
+void DrawSounds();
+
+void FinishOptionsSection(const std::string& section, bool open) {
+	if (section == "Notifier") {
+		if (OptionsSectionHeader("Notification colors"))
+			DrawNotifierColors();
+	}
+	if (!open || section.empty())
+		return;
+	if (section == "Sounds")
+		DrawSounds();
+}
+
+void DrawOptions() {
+	std::string current;
+	bool open = true;
 	for (size_t i = 0; i < g.options.size(); ++i) {
 		auto& o = g.options[i];
-		if (o.group != group)
+		if (o.group != 0)
 			continue;
-		ImGui::PushID(o.key.c_str());
-		if (o.type == "cb") {
-			bool v = o.intValue != 0;
-			if (ImGui::Checkbox(o.label.c_str(), &v)) {
-				o.intValue = v ? 1 : 0;
-				g.PushEvent(D2UI_EVT_OPTION, o.intValue, 0, 0, o.key.c_str(), nullptr);
-			}
-		} else if (o.type == "int") {
-			int v = o.intValue;
-			ImGui::SetNextItemWidth(140);
-			if (ImGui::InputInt("##int", &v, 1, 10)) {
-				o.intValue = v;
-				g.PushEvent(D2UI_EVT_OPTION, o.intValue, 0, 0, o.key.c_str(), nullptr);
-			}
-			ImGui::SameLine();
-			ImGui::TextUnformatted(o.label.c_str());
-		} else if (o.type == "str") {
-			int idx = IndexOf(o.choices, o.strValue);
-			ImGui::SetNextItemWidth(220);
-			if (!o.choices.empty() && ImGui::BeginCombo("##str", o.strValue.c_str())) {
-				for (int c = 0; c < static_cast<int>(o.choices.size()); ++c) {
-					bool sel = (c == idx);
-					if (ImGui::Selectable(o.choices[static_cast<size_t>(c)].c_str(), sel)) {
-						o.strValue = o.choices[static_cast<size_t>(c)];
-						g.PushEvent(D2UI_EVT_OPTION, 0, 0, 0, o.key.c_str(), o.strValue.c_str());
-					}
-					if (sel)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
-			}
-			ImGui::SameLine();
-			ImGui::TextUnformatted(o.label.c_str());
-		} else if (o.type == "hk") {
-			std::string label = (g.capturingHotkey == static_cast<int>(i)) ? "Press a key (ESC disables)" : HotkeyLabel(o.intValue);
-			if (ImGui::Button(label.c_str(), ImVec2(220, 0)))
-				g.capturingHotkey = static_cast<int>(i);
-			ImGui::SameLine();
-			ImGui::TextUnformatted(o.label.c_str());
+		if (o.section != current) {
+			FinishOptionsSection(current, open);
+			current = o.section.empty() ? "Other" : o.section;
+			open = OptionsSectionHeader(current.c_str());
+			if (open && current == "General")
+				DrawThemeSwitcher();
 		}
-		ImGui::PopID();
+		if (!open)
+			continue;
+		DrawOptionRow(o, i);
+	}
+	FinishOptionsSection(current, open);
+
+	if (OptionsSectionHeader("Hotkeys")) {
+		for (size_t i = 0; i < g.options.size(); ++i) {
+			auto& o = g.options[i];
+			if (o.group != 1)
+				continue;
+			DrawOptionRow(o, i);
+		}
 	}
 }
 
@@ -1319,31 +1460,34 @@ void DrawTabContents(int tab) {
 	else if (tab == D2UI_TAB_COMPARE)
 		DrawCompare();
 	else if (tab == D2UI_TAB_OPTIONS)
-		DrawOptions(0);
-	else if (tab == D2UI_TAB_HOTKEYS)
-		DrawOptions(1);
-	else if (tab == D2UI_TAB_SOUNDS)
-		DrawSounds();
+		DrawOptions();
 	else
 		DrawAbout();
 }
 
 void DrawTabStrip() {
-	const char* names[] = {"Basic", "Page 1", "Page 2", "Notifier", "Speedcalc", "Compare", "Options", "Hotkeys", "Sounds", "About"};
-	const int cols = 5;
+	const char* names[] = {"Basic", "Page 1", "Page 2", "Notifier", "Speedcalc", "Compare", "Options", "About"};
+	const int nTabs = IM_ARRAYSIZE(names);
+	const int cols = 4;
 	const int rows = 2;
 	const float height = ImGui::GetFrameHeight();
 	const float overline = std::max(ImGui::GetStyle().TabBarOverlineSize, 2.0f);
 	ImDrawList* dl = ImGui::GetWindowDrawList();
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 	for (int row = 0; row < rows; ++row) {
+		const int rowStart = row * cols;
+		int rowCount = nTabs - rowStart;
+		if (rowCount <= 0)
+			break;
+		if (rowCount > cols)
+			rowCount = cols;
 		const float avail = ImGui::GetContentRegionAvail().x;
-		const float tabW = avail / static_cast<float>(cols);
+		const float tabW = avail / static_cast<float>(rowCount);
 		const ImVec2 rowPos = ImGui::GetCursorScreenPos();
-		for (int col = 0; col < cols; ++col) {
-			const int t = row * cols + col;
+		for (int col = 0; col < rowCount; ++col) {
+			const int t = rowStart + col;
 			const float x0 = rowPos.x + tabW * static_cast<float>(col);
-			const float x1 = (col == cols - 1) ? (rowPos.x + avail) : (rowPos.x + tabW * static_cast<float>(col + 1));
+			const float x1 = (col == rowCount - 1) ? (rowPos.x + avail) : (rowPos.x + tabW * static_cast<float>(col + 1));
 			ImGui::SetCursorScreenPos(ImVec2(x0, rowPos.y));
 			ImGui::PushID(t);
 			if (ImGui::InvisibleButton("tab", ImVec2(x1 - x0, height))) {
@@ -1550,6 +1694,7 @@ int D2UI_CALL D2Ui_Init(const wchar_t* title, int width, int height, const wchar
 	g.mainCtx = ImGui::CreateContext();
 	ImGui::SetCurrentContext(g.mainCtx);
 	LoadTheme();
+	LoadSectionOpen();
 	ApplyThemeToCurrentContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr;
@@ -1744,15 +1889,21 @@ void D2UI_CALL D2Ui_ClearOptions() {
 	g.options.clear();
 }
 
-void D2UI_CALL D2Ui_AddOption(int group, const wchar_t* key, const wchar_t* type, const wchar_t* label, int intValue, const wchar_t* strValue) {
+void D2UI_CALL D2Ui_AddOption(int group, const wchar_t* key, const wchar_t* type, const wchar_t* label, int intValue, const wchar_t* strValue, const wchar_t* section) {
 	OptionItem o;
 	o.group = group;
 	o.key = WideToUtf8(key);
 	o.type = WideToUtf8(type);
 	o.label = WideToUtf8(label);
+	o.section = WideToUtf8(section);
 	o.intValue = intValue;
 	o.strValue = WideToUtf8(strValue);
 	g.options.push_back(std::move(o));
+}
+
+void D2UI_CALL D2Ui_SetNotifierColor(int index, unsigned int colorRgb) {
+	if (index >= 0 && index < 12)
+		g.notifierColors[index] = colorRgb & 0xFFFFFFu;
 }
 
 void D2UI_CALL D2Ui_SetOptionChoices(const wchar_t* key, const wchar_t* pipeList) {

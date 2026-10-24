@@ -41,7 +41,8 @@ enum D2UiEventType {
 	D2UI_EVT_SC_COMBO = 23,
 	D2UI_EVT_SC_INPUT = 24,
 	D2UI_EVT_SC_CHECK = 25,
-	D2UI_EVT_HOTKEY = 26
+	D2UI_EVT_HOTKEY = 26,
+	D2UI_EVT_NOTIFIER_COLOR = 27
 };
 
 enum D2UiTab {
@@ -52,9 +53,7 @@ enum D2UiTab {
 	D2UI_TAB_SPEEDCALC = 4,
 	D2UI_TAB_COMPARE = 5,
 	D2UI_TAB_OPTIONS = 6,
-	D2UI_TAB_HOTKEYS = 7,
-	D2UI_TAB_SOUNDS = 8,
-	D2UI_TAB_ABOUT = 9
+	D2UI_TAB_ABOUT = 7
 };
 
 typedef struct D2UiEvent {
@@ -86,7 +85,8 @@ D2UI_API void D2UI_CALL D2Ui_UpdateStat(int index, const wchar_t* text, int colo
 D2UI_API void D2UI_CALL D2Ui_SetMercenary(int checked);
 
 D2UI_API void D2UI_CALL D2Ui_ClearOptions(void);
-D2UI_API void D2UI_CALL D2Ui_AddOption(int group, const wchar_t* key, const wchar_t* type, const wchar_t* label, int intValue, const wchar_t* strValue);
+D2UI_API void D2UI_CALL D2Ui_AddOption(int group, const wchar_t* key, const wchar_t* type, const wchar_t* label, int intValue, const wchar_t* strValue, const wchar_t* section);
+D2UI_API void D2UI_CALL D2Ui_SetNotifierColor(int index, unsigned int colorRgb);
 D2UI_API void D2UI_CALL D2Ui_SetOptionChoices(const wchar_t* key, const wchar_t* pipeList);
 D2UI_API void D2UI_CALL D2Ui_SetOptionInt(const wchar_t* key, int value);
 D2UI_API void D2UI_CALL D2Ui_SetOptionStr(const wchar_t* key, const wchar_t* value);

@@ -93,29 +93,29 @@ func DefineGlobals()
 	global const $g_iGUIOptionsGeneral = 16
 	global const $g_iGUIOptionsHotkey = 4
 
-	global $g_avGUIOptionList[][5] = [ _
-		["nopickup", 0, "cb", "Automatically enable /nopickup"], _
-		["goblin-alert", 1, "cb", "Play sound (sound 6) when goblins are nearby."], _
-		["unique-tier", 1, "cb", "Show sacred tier of unique (SU/SSU/SSSU)"], _
-		["notify-enabled", 1, "cb", "Enable notifier"], _
-		["notify-superior", 0, "cb", "Notifier prefixes superior items with 'Superior'"], _
-		["notify-only-filtered", 0, "cb", "Only show filtered stats"], _
-		["oneline-name", 0, "cb", "One line item name and base type notification style"], _
-		["oneline-stats", 0, "cb", "One line item stats notification style"], _
-		["overlay-x", 10, "int", "Overlay X offset", "OnChange_OverlaySettings"], _
-		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings"], _
-		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings"], _
-		["overlay-font", "Courier New", "str", "Overlay font", "OnChange_OverlayFont"], _
-		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings"], _
-		["overlay-contrast", 1, "cb", "Draw black background behind overlay text"], _
-		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule"], _
-		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)"], _
-		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem"], _
-		["copy-name", 0, "cb", "Only copy item name"], _
-		["readstats", 0x0000, "hk", "Read stats without tabbing out of the game", "HotKey_ReadStats"], _
-		["show-notifier-log", 0x00DC, "hk", "Show notifier log", "HotKey_ShowNotifierLog"], _
-		["notify-text", $g_sNotifyTextDefault, "tx"], _
-		["selectedNotifierRulesName", "Default", "tx"] _
+	global $g_avGUIOptionList[][6] = [ _
+		["nopickup", 0, "cb", "Automatically enable /nopickup", "", "General"], _
+		["notify-enabled", 1, "cb", "Enable notifier", "", "Notifier"], _
+		["unique-tier", 1, "cb", "Show sacred tier of unique (SU/SSU/SSSU)", "", "Notifier"], _
+		["notify-superior", 0, "cb", "Notifier prefixes superior items with 'Superior'", "", "Notifier"], _
+		["notify-only-filtered", 0, "cb", "Only show filtered stats", "", "Notifier"], _
+		["oneline-name", 0, "cb", "One line item name and base type notification style", "", "Notifier"], _
+		["oneline-stats", 0, "cb", "One line item stats notification style", "", "Notifier"], _
+		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule", "", "Notifier"], _
+		["overlay-x", 10, "int", "Overlay X offset", "OnChange_OverlaySettings", "Overlay"], _
+		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings", "Overlay"], _
+		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings", "Overlay"], _
+		["overlay-font", "Courier New", "str", "Overlay font", "OnChange_OverlayFont", "Overlay"], _
+		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings", "Overlay"], _
+		["overlay-contrast", 1, "cb", "Draw black background behind overlay text", "", "Overlay"], _
+		["goblin-alert", 1, "cb", "Play sound (sound 6) when goblins are nearby.", "", "Sounds"], _
+		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)", "", "Sounds"], _
+		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem", ""], _
+		["copy-name", 0, "cb", "Only copy item name", "", ""], _
+		["readstats", 0x0000, "hk", "Read stats without tabbing out of the game", "HotKey_ReadStats", ""], _
+		["show-notifier-log", 0x00DC, "hk", "Show notifier log", "HotKey_ShowNotifierLog", ""], _
+		["notify-text", $g_sNotifyTextDefault, "tx", "", "", ""], _
+		["selectedNotifierRulesName", "Default", "tx", "", "", ""] _
 	]
 endfunc
 #EndRegion
@@ -566,11 +566,13 @@ func CreateGUI()
 	local $sTitle = not @Compiled ? "Test" : StringFormat("D2Stats %s - [%s]", FileGetVersion(@AutoItExe, "FileVersion"), FileGetVersion(@AutoItExe, "Comments"))
 
 	LoadGUISettings()
+	LoadNotifierColors()
 	Ui_Init($sTitle, $g_iGUIWidth, $g_iGUIHeight)
 
 	StatsRead_CreateTabs()
 	UpdateGUI()
 	Ui_PushOptions()
+	Ui_PushNotifierColors()
 	Ui_AssignHotkeys()
 	Ui_ApplyOverlayConfig()
 

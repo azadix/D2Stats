@@ -3,6 +3,8 @@
 
 #Region Overlay globals
 global $g_hOverlayGUI = 0
+global const $g_aiNotifierColorDefault[12] = [0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0xF0CD8C, 0x9D9D9D, 0x000000, 0xFF00FF, 0xFFBF00, 0xFFFF00, 0x008000, 0x9D00FF]
+global const $g_asNotifierColorKeys[12] = ["white", "red", "lime", "blue", "gold", "grey", "black", "pink", "orange", "yellow", "green", "purple"]
 global $g_NotifierColorArray[12] = [0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0xF0CD8C, 0x9D9D9D, 0x000000, 0xFF00FF, 0xFFBF00, 0xFFFF00, 0x008000, 0x9D00FF]
 global $g_aOverlayHistory[0][3]  ; [text, color, gapAfter]
 global $g_bOverlayHistoryMode = False
@@ -129,6 +131,45 @@ EndFunc
 Func OverlayRowHeight()
 	OverlayGetMetrics()
 	Return $g_iOverlayRowHeight
+EndFunc
+#EndRegion
+
+#Region Notifier colors
+Func ParseNotifierColorHex($sValue, $iFallback)
+	$sValue = StringStripWS(String($sValue), $STR_STRIPALL)
+	If $sValue = "" Then Return $iFallback
+	If StringLeft($sValue, 1) = "#" Then $sValue = StringTrimLeft($sValue, 1)
+	If StringLeft($sValue, 2) = "0x" Or StringLeft($sValue, 2) = "0X" Then $sValue = StringTrimLeft($sValue, 2)
+	If Not StringIsXDigit($sValue) Then Return $iFallback
+	Local $iColor = Dec($sValue)
+	If @error Then Return $iFallback
+	If $iColor < 0 Then $iColor = 0
+	If $iColor > 0xFFFFFF Then $iColor = 0xFFFFFF
+	Return $iColor
+EndFunc
+
+Func LoadNotifierColors()
+	Local $i
+	For $i = 0 To 11
+		$g_NotifierColorArray[$i] = $g_aiNotifierColorDefault[$i]
+		Local $sRead = IniRead($g_sSettingsIni, "NotifierColors", $g_asNotifierColorKeys[$i], "")
+		$g_NotifierColorArray[$i] = ParseNotifierColorHex($sRead, $g_aiNotifierColorDefault[$i])
+	Next
+EndFunc
+
+Func SaveNotifierColors()
+	Local $i
+	For $i = 0 To 11
+		IniWrite($g_sSettingsIni, "NotifierColors", $g_asNotifierColorKeys[$i], Hex($g_NotifierColorArray[$i], 6))
+	Next
+EndFunc
+
+Func SetNotifierColor($iIndex, $iColor)
+	If $iIndex < 0 Or $iIndex > 11 Then Return
+	$iColor = BitAND($iColor, 0xFFFFFF)
+	If $g_NotifierColorArray[$iIndex] = $iColor Then Return
+	$g_NotifierColorArray[$iIndex] = $iColor
+	IniWrite($g_sSettingsIni, "NotifierColors", $g_asNotifierColorKeys[$iIndex], Hex($iColor, 6))
 EndFunc
 #EndRegion
 
