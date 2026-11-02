@@ -107,6 +107,7 @@ func DefineGlobals()
 		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-font", "Courier New", "str", "Overlay font", "OnChange_OverlayFont", "Overlay"], _
 		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings", "Overlay"], _
+		["overlay-linespacing", 2, "int", "Spacing between overlay lines (px)", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-contrast", 1, "cb", "Draw black background behind overlay text", "", "Overlay"], _
 		["goblin-alert", 1, "cb", "Play sound (sound 6) when goblins are nearby.", "", "Sounds"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)", "", "Sounds"], _
@@ -357,7 +358,7 @@ Func OnChange_OverlaySettings()
         Local $iValue = ClampOverlayInt($sOptionKey, GUICtrlRead($idCtrl))
         If String($iValue) <> GUICtrlRead($idCtrl) Then GUICtrlSetData($idCtrl, $iValue)
         _GUI_Option($sOptionKey, $iValue)
-        If $sOptionKey = "overlay-fontsize" Then $g_sOverlayMetricsKey = ""
+        If $sOptionKey = "overlay-fontsize" Or $sOptionKey = "overlay-linespacing" Then $g_sOverlayMetricsKey = ""
 
         If StringInStr($sOptionKey, "overlay-") And $g_hOverlayGUI Then
             ; Reposition only. Do not GUIDelete — that drops live overlay messages.
@@ -380,6 +381,9 @@ func ClampOverlayInt($sOption, $vValue)
 		case "overlay-timeout"
 			if ($iValue < 500) then $iValue = 500
 			if ($iValue > 120000) then $iValue = 120000
+		case "overlay-linespacing"
+			if ($iValue < 0) then $iValue = 0
+			if ($iValue > 64) then $iValue = 64
 	endswitch
 	return $iValue
 endfunc

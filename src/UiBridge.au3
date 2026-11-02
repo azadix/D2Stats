@@ -102,8 +102,8 @@ func Ui_OverlaySetTarget($iX, $iY, $iW, $iH, $bVisible)
 	DllCall($g_hUiDll, "none", "D2Ui_OverlaySetTarget", "int", $iX, "int", $iY, "int", $iW, "int", $iH, "int", $bVisible ? 1 : 0)
 endfunc
 
-func Ui_OverlayConfigure($sFont, $iSize, $iTimeout, $bContrast)
-	DllCall($g_hUiDll, "none", "D2Ui_OverlayConfigure", "wstr", $sFont, "int", $iSize, "int", $iTimeout, "int", $bContrast ? 1 : 0)
+func Ui_OverlayConfigure($sFont, $iSize, $iTimeout, $bContrast, $iLineSpacing)
+	DllCall($g_hUiDll, "none", "D2Ui_OverlayConfigure", "wstr", $sFont, "int", $iSize, "int", $iTimeout, "int", $bContrast ? 1 : 0, "int", $iLineSpacing)
 endfunc
 
 func Ui_OverlayIsVisible()
@@ -251,7 +251,7 @@ func Ui_SetSpeedCalcHighlight($iTable, $iRow)
 endfunc
 
 func Ui_ApplyOverlayConfig()
-	Ui_OverlayConfigure(OverlayFont(), OverlayInt("overlay-fontsize"), OverlayInt("overlay-timeout"), _GUI_Option("overlay-contrast"))
+	Ui_OverlayConfigure(OverlayFont(), OverlayInt("overlay-fontsize"), OverlayInt("overlay-timeout"), _GUI_Option("overlay-contrast"), OverlayInt("overlay-linespacing"))
 endfunc
 
 func Ui_PushOptions()
@@ -292,7 +292,7 @@ func Ui_HandleOptionEvent($sKey, $iInt, $sStr)
 		_GUI_Option($sKey, $sStr)
 	endif
 	if (StringInStr($sKey, "overlay-") == 1) then
-		if ($sKey == "overlay-fontsize" or $sKey == "overlay-font") then $g_sOverlayMetricsKey = ""
+		if ($sKey == "overlay-fontsize" or $sKey == "overlay-font" or $sKey == "overlay-linespacing") then $g_sOverlayMetricsKey = ""
 		Ui_ApplyOverlayConfig()
 		UpdateOverlayPosition()
 	endif

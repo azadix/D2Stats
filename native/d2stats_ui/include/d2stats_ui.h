@@ -76,7 +76,7 @@ D2UI_API void D2UI_CALL D2Ui_OverlaySetTarget(int x, int y, int w, int h, int vi
 D2UI_API void D2UI_CALL D2Ui_Print(const wchar_t* text, unsigned int colorRgb, int timeoutMs);
 D2UI_API void D2UI_CALL D2Ui_OverlayAddGap(void);
 D2UI_API void D2UI_CALL D2Ui_OverlayClear(void);
-D2UI_API void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int timeoutMs, int contrast);
+D2UI_API void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int timeoutMs, int contrast, int lineSpacing);
 D2UI_API int D2UI_CALL D2Ui_OverlayIsVisible(void);
 
 D2UI_API void D2UI_CALL D2Ui_ClearStats(void);

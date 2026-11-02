@@ -90,7 +90,8 @@ Func OverlayGetMetrics()
 	Local $sFont = OverlayFont()
 	Local $iSize = OverlayInt("overlay-fontsize")
 	If $iSize < 1 Then $iSize = 1
-	Local $sKey = $sFont & "|" & $iSize
+	Local $iSpacing = OverlayInt("overlay-linespacing")
+	Local $sKey = $sFont & "|" & $iSize & "|" & $iSpacing
 	If $sKey == $g_sOverlayMetricsKey Then Return
 
 	Local $iCharW = 1
@@ -119,7 +120,7 @@ Func OverlayGetMetrics()
 	EndIf
 
 	$g_iOverlayCharWidth = $iCharW
-	$g_iOverlayRowHeight = $iRowH
+	$g_iOverlayRowHeight = $iRowH + $iSpacing
 	$g_sOverlayMetricsKey = $sKey
 EndFunc
 

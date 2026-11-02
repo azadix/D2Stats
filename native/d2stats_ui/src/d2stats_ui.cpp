@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <fstream>
 #include <map>
 #include <string>
 #include <string.h>
@@ -189,6 +190,7 @@ struct App {
 	int overlayFontSize = 12;
 	int overlayTimeoutMs = 7500;
 	bool overlayContrast = true;
+	int overlayLineSpacing = 2;
 	int overlayAtlasVersion = 0;
 
 	int activeTab = 0;
@@ -224,7 +226,7 @@ struct App {
 	ScTable scTables[4];
 
 	std::vector<OverlayLine> overlayLines;
-	int theme = 2; // 0 Cherry, 1 Dark, 2 Light (default)
+	int theme = 0; // index into themes.ini (Light default)
 	std::map<std::string, bool> sectionOpen;
 
 	void PushEvent(int type, int i0 = 0, int i1 = 0, int i2 = 0, const char* key = nullptr, const char* text = nullptr) {
@@ -251,9 +253,38 @@ struct App {
 
 App g;
 
-enum UiTheme { kThemeCherry = 0, kThemeDark = 1, kThemeLight = 2 };
+struct IniTheme {
+	std::string name;
+	std::string base = "StyleColorsLight";
+	bool hasColor[ImGuiCol_COUNT]{};
+	ImVec4 colors[ImGuiCol_COUNT]{};
+	bool hasRounding = false;
+	float rounding = 3.0f;
+	bool hasFrameBorder = false;
+	float frameBorder = 0.0f;
+	bool hasWindowPadding = false;
+	ImVec2 windowPadding{};
+	bool hasFramePadding = false;
+	ImVec2 framePadding{};
+	bool hasItemSpacing = false;
+	ImVec2 itemSpacing{};
+	bool hasItemInnerSpacing = false;
+	ImVec2 itemInnerSpacing{};
+	bool hasIndentSpacing = false;
+	float indentSpacing = 0.0f;
+	bool hasScrollbarSize = false;
+	float scrollbarSize = 0.0f;
+	bool hasGrabMinSize = false;
+	float grabMinSize = 0.0f;
+	bool hasWindowBorderSize = false;
+	float windowBorderSize = 0.0f;
+	bool hasPopupBorderSize = false;
+	float popupBorderSize = 0.0f;
+};
 
-const char* ThemeNames[] = {"Cherry", "Dark", "Light"};
+std::vector<IniTheme> g_iniThemes;
+std::vector<std::string> g_themeNames;
+std::vector<const char*> g_themeNamePtrs;
 
 const unsigned kDefaultNotifierColors[12] = {
 	0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0xF0CD8C, 0x9D9D9D,
@@ -284,61 +315,229 @@ void UnpackRgb(unsigned rgb, float col[3]) {
 	col[2] = (rgb & 0xFF) / 255.0f;
 }
 
-std::wstring UiIniPath() {
+std::wstring ModuleDirPath() {
 	wchar_t path[MAX_PATH]{};
 	HMODULE mod = nullptr;
 	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		reinterpret_cast<LPCWSTR>(&UiIniPath), &mod);
+		reinterpret_cast<LPCWSTR>(&ModuleDirPath), &mod);
 	GetModuleFileNameW(mod, path, MAX_PATH);
 	std::wstring p(path);
 	size_t slash = p.find_last_of(L"\\/");
 	if (slash != std::wstring::npos)
 		p.resize(slash + 1);
-	p += L"D2Stats.exe.ini";
 	return p;
 }
 
-void RemapBlueAccentsToCherry() {
+std::wstring UiIniPath() {
+	return ModuleDirPath() + L"D2Stats.exe.ini";
+}
+
+std::wstring ThemesIniPath() {
+	return ModuleDirPath() + L"themes.ini";
+}
+
+std::string ThemesIniPathUtf8Fallback() {
+	return WideToUtf8(ThemesIniPath().c_str());
+}
+
+void RebuildThemeNamePtrs() {
+	g_themeNamePtrs.clear();
+	g_themeNamePtrs.reserve(g_themeNames.size());
+	for (const std::string& n : g_themeNames)
+		g_themeNamePtrs.push_back(n.c_str());
+}
+
+int FindImGuiColByName(const std::string& name) {
+	for (int i = 0; i < ImGuiCol_COUNT; ++i) {
+		if (name == ImGui::GetStyleColorName(i))
+			return i;
+	}
+	if (name == "TabActive")
+		return ImGuiCol_TabSelected;
+	if (name == "TabUnfocused")
+		return ImGuiCol_TabDimmed;
+	if (name == "TabUnfocusedActive")
+		return ImGuiCol_TabDimmedSelected;
+	return -1;
+}
+
+bool ParseFloatList(const std::string& s, float* out, int count) {
+	size_t pos = 0;
+	for (int i = 0; i < count; ++i) {
+		while (pos < s.size() && (s[pos] == ' ' || s[pos] == '\t'))
+			++pos;
+		if (pos >= s.size())
+			return false;
+		char* end = nullptr;
+		out[i] = strtof(s.c_str() + pos, &end);
+		if (end == s.c_str() + pos)
+			return false;
+		pos = static_cast<size_t>(end - s.c_str());
+		while (pos < s.size() && (s[pos] == ' ' || s[pos] == '\t' || s[pos] == ','))
+			++pos;
+	}
+	return true;
+}
+
+void LoadThemesFromIni() {
+	g_iniThemes.clear();
+	g_themeNames.clear();
+
+	std::ifstream in(ThemesIniPath().c_str());
+	if (!in)
+		in.open(ThemesIniPathUtf8Fallback().c_str());
+	if (!in) {
+		RebuildThemeNamePtrs();
+		return;
+	}
+
+	IniTheme* cur = nullptr;
+	std::string line;
+	while (std::getline(in, line)) {
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
+			line.pop_back();
+		size_t start = 0;
+		while (start < line.size() && (line[start] == ' ' || line[start] == '\t'))
+			++start;
+		if (start > 0)
+			line = line.substr(start);
+		if (line.empty() || line[0] == ';' || line[0] == '#')
+			continue;
+		if (line.front() == '[' && line.back() == ']') {
+			IniTheme theme;
+			theme.name = line.substr(1, line.size() - 2);
+			g_iniThemes.push_back(std::move(theme));
+			cur = &g_iniThemes.back();
+			g_themeNames.push_back(cur->name);
+			continue;
+		}
+		if (!cur)
+			continue;
+		size_t eq = line.find('=');
+		if (eq == std::string::npos)
+			continue;
+		std::string key = line.substr(0, eq);
+		std::string val = line.substr(eq + 1);
+		while (!key.empty() && (key.back() == ' ' || key.back() == '\t'))
+			key.pop_back();
+		while (!val.empty() && (val.front() == ' ' || val.front() == '\t'))
+			val.erase(val.begin());
+
+		if (key == "Rounding") {
+			cur->hasRounding = true;
+			cur->rounding = strtof(val.c_str(), nullptr);
+		} else if (key == "FrameBorder") {
+			cur->hasFrameBorder = true;
+			cur->frameBorder = strtof(val.c_str(), nullptr);
+		} else if (key == "WindowPadding") {
+			float v[2]{};
+			if (ParseFloatList(val, v, 2)) {
+				cur->hasWindowPadding = true;
+				cur->windowPadding = ImVec2(v[0], v[1]);
+			}
+		} else if (key == "FramePadding") {
+			float v[2]{};
+			if (ParseFloatList(val, v, 2)) {
+				cur->hasFramePadding = true;
+				cur->framePadding = ImVec2(v[0], v[1]);
+			}
+		} else if (key == "ItemSpacing") {
+			float v[2]{};
+			if (ParseFloatList(val, v, 2)) {
+				cur->hasItemSpacing = true;
+				cur->itemSpacing = ImVec2(v[0], v[1]);
+			}
+		} else if (key == "ItemInnerSpacing") {
+			float v[2]{};
+			if (ParseFloatList(val, v, 2)) {
+				cur->hasItemInnerSpacing = true;
+				cur->itemInnerSpacing = ImVec2(v[0], v[1]);
+			}
+		} else if (key == "IndentSpacing") {
+			cur->hasIndentSpacing = true;
+			cur->indentSpacing = strtof(val.c_str(), nullptr);
+		} else if (key == "ScrollbarSize") {
+			cur->hasScrollbarSize = true;
+			cur->scrollbarSize = strtof(val.c_str(), nullptr);
+		} else if (key == "GrabMinSize") {
+			cur->hasGrabMinSize = true;
+			cur->grabMinSize = strtof(val.c_str(), nullptr);
+		} else if (key == "WindowBorderSize") {
+			cur->hasWindowBorderSize = true;
+			cur->windowBorderSize = strtof(val.c_str(), nullptr);
+		} else if (key == "PopupBorderSize") {
+			cur->hasPopupBorderSize = true;
+			cur->popupBorderSize = strtof(val.c_str(), nullptr);
+		} else if (key == "Base") {
+			cur->base = val;
+		} else {
+			int col = FindImGuiColByName(key);
+			if (col >= 0) {
+				float v[4]{};
+				if (ParseFloatList(val, v, 4)) {
+					cur->hasColor[col] = true;
+					cur->colors[col] = ImVec4(v[0], v[1], v[2], v[3]);
+				}
+			}
+		}
+	}
+
+	RebuildThemeNamePtrs();
+}
+
+void ApplySharedLayoutMetrics() {
+	ImGuiStyle& style = ImGui::GetStyle();
+	const float r = 8.0f;
+	style.WindowRounding = r;
+	style.ChildRounding = r;
+	style.FrameRounding = r * 0.75f;
+	style.PopupRounding = r * 0.75f;
+	style.ScrollbarRounding = 9.0f;
+	style.GrabRounding = r * 0.75f;
+	style.TabRounding = r * 0.75f;
+	style.FramePadding = ImVec2(5, 2);
+	style.ItemSpacing = ImVec2(6, 2);
+	style.ItemInnerSpacing = ImVec2(4, 2);
+	style.CellPadding = ImVec2(4, 1);
+	style.ScrollbarSize = 14.0f;
+	style.FrameBorderSize = 1.0f;
+}
+
+void ApplyFallbackLightThemeStyle() {
+	ImGui::StyleColorsLight();
+	ApplySharedLayoutMetrics();
+	ImGui::GetStyle().Colors[ImGuiCol_Border] = ImVec4(0.45f, 0.45f, 0.50f, 1.0f);
+}
+
+void ApplyIniThemeStyle(const IniTheme& theme) {
+	if (theme.base == "StyleColorsLight")
+		ImGui::StyleColorsLight();
+	else
+		ImGui::StyleColorsDark();
+
+	ApplySharedLayoutMetrics();
+
 	ImGuiStyle& style = ImGui::GetStyle();
 	for (int i = 0; i < ImGuiCol_COUNT; ++i) {
-		ImVec4& c = style.Colors[i];
-		if (c.z > c.x + 0.12f && c.z > c.y * 0.85f) {
-			c = ImVec4(c.z, c.x * 0.42f + 0.04f, c.x * 0.32f + 0.06f, c.w);
-		}
+		if (theme.hasColor[i])
+			style.Colors[i] = theme.colors[i];
+	}
+	// Keep selected-tab overline on the theme accent (CheckMark), not StyleColorsDark blue.
+	if (!theme.hasColor[ImGuiCol_TabSelectedOverline])
+		style.Colors[ImGuiCol_TabSelectedOverline] = style.Colors[ImGuiCol_CheckMark];
+	if (!theme.hasColor[ImGuiCol_TabDimmedSelectedOverline]) {
+		ImVec4 dim = style.Colors[ImGuiCol_CheckMark];
+		dim.w *= 0.80f;
+		style.Colors[ImGuiCol_TabDimmedSelectedOverline] = dim;
 	}
 }
 
 void ApplyThemeToCurrentContext() {
-	switch (g.theme) {
-	case kThemeLight:
-		ImGui::StyleColorsLight();
-		break;
-	case kThemeDark:
-		ImGui::StyleColorsDark();
-		break;
-	default:
-		ImGui::StyleColorsDark();
-		RemapBlueAccentsToCherry();
-		break;
+	if (g.theme < 0 || g.theme >= static_cast<int>(g_iniThemes.size())) {
+		ApplyFallbackLightThemeStyle();
+		return;
 	}
-	ImGuiStyle& uiStyle = ImGui::GetStyle();
-	uiStyle.FramePadding = ImVec2(5, 2);
-	uiStyle.ItemSpacing = ImVec2(6, 2);
-	uiStyle.ItemInnerSpacing = ImVec2(4, 2);
-	uiStyle.CellPadding = ImVec2(4, 1);
-	uiStyle.ScrollbarSize = 14.0f;
-	uiStyle.TabRounding = 0.0f;
-	uiStyle.FrameBorderSize = 1.0f;
-	ImVec4 accent = uiStyle.Colors[ImGuiCol_CheckMark];
-	if (g.theme == kThemeLight) {
-		uiStyle.Colors[ImGuiCol_Border] = ImVec4(0.45f, 0.45f, 0.50f, 1.0f);
-	} else {
-		auto DarkFrame = [&](float t, float a) { return ImVec4(accent.x * t, accent.y * t, accent.z * t, a); };
-		uiStyle.Colors[ImGuiCol_FrameBg] = DarkFrame(0.12f, 1.0f);
-		uiStyle.Colors[ImGuiCol_FrameBgHovered] = DarkFrame(0.20f, 1.0f);
-		uiStyle.Colors[ImGuiCol_FrameBgActive] = DarkFrame(0.28f, 1.0f);
-		uiStyle.Colors[ImGuiCol_Border] = ImVec4(accent.x * 0.55f, accent.y * 0.55f, accent.z * 0.55f, 1.0f);
-	}
+	ApplyIniThemeStyle(g_iniThemes[static_cast<size_t>(g.theme)]);
 }
 
 void ApplyThemeAllContexts() {
@@ -359,20 +558,32 @@ void ApplyThemeAllContexts() {
 		ImGui::SetCurrentContext(prev);
 }
 
-void LoadTheme() {
-	wchar_t buf[32]{};
-	GetPrivateProfileStringW(L"UI", L"Theme", L"Light", buf, 32, UiIniPath().c_str());
-	g.theme = kThemeLight;
-	for (int i = 0; i < IM_ARRAYSIZE(ThemeNames); ++i) {
-		if (_wcsicmp(buf, Utf8ToWide(ThemeNames[i]).c_str()) == 0) {
-			g.theme = i;
-			break;
-		}
+int FindThemeIndexByName(const char* name) {
+	for (int i = 0; i < static_cast<int>(g_themeNames.size()); ++i) {
+		if (_stricmp(g_themeNames[static_cast<size_t>(i)].c_str(), name) == 0)
+			return i;
 	}
+	return -1;
+}
+
+void LoadTheme() {
+	if (g_themeNames.empty())
+		LoadThemesFromIni();
+	wchar_t buf[64]{};
+	GetPrivateProfileStringW(L"UI", L"Theme", L"Light", buf, 64, UiIniPath().c_str());
+	g.theme = FindThemeIndexByName("Light");
+	if (g.theme < 0)
+		g.theme = 0;
+	const std::string saved = WideToUtf8(buf);
+	const int savedIndex = FindThemeIndexByName(saved.c_str());
+	if (savedIndex >= 0)
+		g.theme = savedIndex;
 }
 
 void SaveTheme() {
-	WritePrivateProfileStringW(L"UI", L"Theme", Utf8ToWide(ThemeNames[g.theme]).c_str(), UiIniPath().c_str());
+	if (g.theme < 0 || g.theme >= static_cast<int>(g_themeNames.size()))
+		g.theme = 0;
+	WritePrivateProfileStringW(L"UI", L"Theme", Utf8ToWide(g_themeNames[static_cast<size_t>(g.theme)].c_str()).c_str(), UiIniPath().c_str());
 }
 
 const char* kOptionsSectionNames[] = {
@@ -414,9 +625,11 @@ bool OptionsSectionHeader(const char* name) {
 }
 
 void DrawThemeSwitcher() {
+	if (g_themeNamePtrs.empty())
+		LoadThemesFromIni();
 	int t = g.theme;
-	ImGui::SetNextItemWidth(160);
-	if (ImGui::Combo("Theme", &t, ThemeNames, IM_ARRAYSIZE(ThemeNames))) {
+	ImGui::SetNextItemWidth(220);
+	if (!g_themeNamePtrs.empty() && ImGui::Combo("Theme", &t, g_themeNamePtrs.data(), static_cast<int>(g_themeNamePtrs.size()))) {
 		g.theme = t;
 		ApplyThemeAllContexts();
 		SaveTheme();
@@ -900,6 +1113,11 @@ LRESULT CALLBACK DiffWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 	if (prev)
 		ImGui::SetCurrentContext(prev);
 	return result;
+}
+
+bool BottomBarVisible() {
+	return g.activeTab <= D2UI_TAB_PAGE2 || g.activeTab == D2UI_TAB_COMPARE || g.activeTab == D2UI_TAB_SPEEDCALC ||
+		   g.activeTab == D2UI_TAB_ABOUT || g.activeTab == D2UI_TAB_NOTIFIER;
 }
 
 void DrawBottomBar() {
@@ -1444,6 +1662,7 @@ void DrawAbout() {
 	ImGui::TextUnformatted("Layout help by krys.");
 	ImGui::TextUnformatted("Additional help by suchbalance and Quirinus.");
 	ImGui::TextUnformatted("Sounds by MurderManTX and Cromi38.");
+	ImGui::TextUnformatted("ImGui themes by TheAncientOwl (modified by Azadi)");
 	ImGui::Dummy(ImVec2(0, 8));
 	ImGui::TextWrapped("If you're unsure what any of the abbreviations mean, all of them should have a tooltip when hovered over.");
 	ImGui::Dummy(ImVec2(0, 8));
@@ -1472,6 +1691,7 @@ void DrawTabStrip() {
 	const int rows = 2;
 	const float height = ImGui::GetFrameHeight();
 	const float overline = std::max(ImGui::GetStyle().TabBarOverlineSize, 2.0f);
+	const float rounding = ImGui::GetStyle().TabRounding;
 	ImDrawList* dl = ImGui::GetWindowDrawList();
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
 	for (int row = 0; row < rows; ++row) {
@@ -1499,9 +1719,9 @@ void DrawTabStrip() {
 			const bool selected = g.activeTab == t;
 			const bool hovered = ImGui::IsItemHovered();
 			ImU32 bg = ImGui::GetColorU32(selected ? ImGuiCol_TabSelected : hovered ? ImGuiCol_TabHovered : ImGuiCol_Tab);
-			dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + height), bg);
+			dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + height), bg, rounding, ImDrawFlags_RoundCornersTop);
 			if (selected)
-				dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + overline), ImGui::GetColorU32(ImGuiCol_TabSelectedOverline));
+				dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + overline), ImGui::GetColorU32(ImGuiCol_TabSelectedOverline), rounding, ImDrawFlags_RoundCornersTop);
 			const ImVec2 textSz = ImGui::CalcTextSize(names[t]);
 			dl->AddText(ImVec2(x0 + (x1 - x0 - textSz.x) * 0.5f, rowPos.y + (height - textSz.y) * 0.5f),
 				ImGui::GetColorU32(ImGuiCol_Text), names[t]);
@@ -1525,7 +1745,8 @@ void DrawMainUi() {
 							 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 	ImGui::Begin("D2Stats", nullptr, flags);
 
-	const float bottomH = ImGui::GetFrameHeight() + 4.0f;
+	const bool showBottom = BottomBarVisible();
+	const float bottomH = showBottom ? (ImGui::GetFrameHeight() + 4.0f) : 0.0f;
 	DrawTabStrip();
 
 	const bool innerScrolls =
@@ -1533,11 +1754,12 @@ void DrawMainUi() {
 	ImGuiWindowFlags bodyFlags = innerScrolls
 		? (ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)
 		: ImGuiWindowFlags_AlwaysVerticalScrollbar;
-	ImGui::BeginChild("tabbody", ImVec2(0, -bottomH), ImGuiChildFlags_None, bodyFlags);
+	ImGui::BeginChild("tabbody", ImVec2(0, showBottom ? -bottomH : 0.0f), ImGuiChildFlags_None, bodyFlags);
 	DrawTabContents(g.activeTab);
 	ImGui::EndChild();
 
-	DrawBottomBar();
+	if (showBottom)
+		DrawBottomBar();
 	ImGui::End();
 	ImGui::PopStyleVar();
 
@@ -1558,6 +1780,7 @@ void DrawOverlayUi(int w, int h) {
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
 							 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove;
 	ImGui::Begin("##overlay", nullptr, flags);
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, static_cast<float>(g.overlayLineSpacing)));
 	if (g.overlayFont)
 		ImGui::PushFont(g.overlayFont);
 	for (const auto& line : g.overlayLines) {
@@ -1572,6 +1795,7 @@ void DrawOverlayUi(int w, int h) {
 	}
 	if (g.overlayFont)
 		ImGui::PopFont();
+	ImGui::PopStyleVar();
 	ImGui::End();
 }
 
@@ -1693,6 +1917,7 @@ int D2UI_CALL D2Ui_Init(const wchar_t* title, int width, int height, const wchar
 	IMGUI_CHECKVERSION();
 	g.mainCtx = ImGui::CreateContext();
 	ImGui::SetCurrentContext(g.mainCtx);
+	LoadThemesFromIni();
 	LoadTheme();
 	LoadSectionOpen();
 	ApplyThemeToCurrentContext();
@@ -1838,7 +2063,7 @@ void D2UI_CALL D2Ui_OverlayClear() {
 	g.overlayLines.clear();
 }
 
-void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int timeoutMs, int contrast) {
+void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int timeoutMs, int contrast, int lineSpacing) {
 	std::string name = font ? WideToUtf8(font) : "Courier New";
 	int size = fontSize > 0 ? fontSize : 12;
 	bool fontChanged = name != g.overlayFontName || size != g.overlayFontSize;
@@ -1846,6 +2071,11 @@ void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int time
 	g.overlayFontSize = size;
 	g.overlayTimeoutMs = timeoutMs;
 	g.overlayContrast = contrast != 0;
+	if (lineSpacing < 0)
+		lineSpacing = 0;
+	if (lineSpacing > 64)
+		lineSpacing = 64;
+	g.overlayLineSpacing = lineSpacing;
 	if (fontChanged && g.overlayCtx)
 		RebuildOverlayFont();
 }
