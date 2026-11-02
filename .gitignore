@@ -1,4 +1,5 @@
 *.ini
+!themes.ini
 D2Stats*.exe
 D2Stats*.txt
 d2stats_ui.dll
