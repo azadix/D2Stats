@@ -116,6 +116,7 @@ struct OverlayLine {
 	unsigned color = 0xFFFFFF;
 	ULONGLONG expireAt = 0;
 	bool gapAfter = false;
+	bool stat = false; // smaller text than the item name
 };
 
 struct StatItem {
@@ -194,6 +195,8 @@ struct App {
 	ImFont* editorFont = nullptr;
 	std::string overlayFontName = "Courier New";
 	int overlayFontSize = 12;
+	int editorFontSize = 12;
+	std::string editorFontName = "Courier New";
 	int overlayTimeoutMs = 7500;
 	bool overlayContrast = true;
 	int overlayLineSpacing = 2;
@@ -997,8 +1000,17 @@ ImFont* AddFaceFont(ImGuiIO& io, const std::string& face, float pixelSize) {
 	return io.Fonts->AddFontFromFileTTF(WideToUtf8(path.c_str()).c_str(), pixelSize, &cfg);
 }
 
-// The rule editor renders at 75% of the notifier overlay font size.
-constexpr float kEditorFontScale = 0.75f;
+// The notifier editor has its own size setting, independent of the overlay.
+float EditorFontPixels() {
+	int pt = std::max(6, g.editorFontSize);
+	HDC dc = GetDC(nullptr);
+	int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
+	if (dc)
+		ReleaseDC(nullptr, dc);
+	if (dpi < 1)
+		dpi = 96;
+	return pt * static_cast<float>(dpi) / 72.0f;
+}
 
 void LoadUiFont(ImGuiContext* ctx) {
 	if (!ctx)
@@ -1015,10 +1027,9 @@ void LoadUiFont(ImGuiContext* ctx) {
 		io.Fonts->AddFontDefault();
 
 	if (ctx == g.mainCtx) {
-		// The rule editor uses the notifier overlay face at 75% of its size: the
-		// overlay is meant to be read from across the screen, the editor is not.
-		const float editorPixels = std::max(9.0f, OverlayFontPixels() * kEditorFontScale);
-		g.editorFont = AddFaceFont(io, g.overlayFontName, editorPixels);
+		// The rule editor has its own face and size settings.
+		const float editorPixels = EditorFontPixels();
+		g.editorFont = AddFaceFont(io, g.editorFontName, editorPixels);
 		if (!g.editorFont)
 			g.editorFont = AddFaceFont(io, "Courier New", editorPixels);
 		if (!g.editorFont)
@@ -1395,7 +1406,7 @@ void DrawOptions() {
 		}
 		if (!open)
 			continue;
-		DrawOptionRow(o, i);
+
 	}
 	FinishOptionsSection(current, open);
 
@@ -2207,6 +2218,20 @@ void D2UI_CALL D2Ui_OverlayClear() {
 	g.overlayLines.clear();
 }
 
+void D2UI_CALL D2Ui_SetEditorFont(const wchar_t* font) {
+	std::string name = font && *font ? WideToUtf8(font) : "Courier New";
+	if (name == g.editorFontName)
+		return;
+	g.editorFontName = name;
+	g.wantMainFontRebuild = true;
+}
+void D2UI_CALL D2Ui_SetEditorFontSize(int size) {
+	int v = size < 6 ? 6 : (size > 48 ? 48 : size);
+	if (v == g.editorFontSize)
+		return;
+	g.editorFontSize = v;
+	g.wantMainFontRebuild = true;
+}
 void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int timeoutMs, int contrast, int lineSpacing) {
 	std::string name = font ? WideToUtf8(font) : "Courier New";
 	int size = fontSize > 0 ? fontSize : 12;

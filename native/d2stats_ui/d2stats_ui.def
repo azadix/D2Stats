@@ -11,6 +11,8 @@ EXPORTS
 	D2Ui_OverlayAddGap
 	D2Ui_OverlayClear
 	D2Ui_OverlayConfigure
+	D2Ui_SetEditorFontSize
+	D2Ui_SetEditorFont
 	D2Ui_OverlayIsVisible
 	D2Ui_ClearStats
 	D2Ui_AddStat

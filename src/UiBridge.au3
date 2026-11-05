@@ -262,6 +262,14 @@ func Ui_SetSpeedCalcHighlight($iTable, $iRow)
 	DllCall($g_hUiDll, "none", "D2Ui_SetSpeedCalcHighlight", "int", $iTable, "int", $iRow)
 endfunc
 
+func Ui_SetEditorFontSize($iSize)
+	DllCall($g_hUiDll, "none", "D2Ui_SetEditorFontSize", "int", $iSize)
+endfunc
+
+func Ui_SetEditorFont($sFont)
+	DllCall($g_hUiDll, "none", "D2Ui_SetEditorFont", "wstr", $sFont)
+endfunc
+
 func Ui_ApplyOverlayConfig()
 	Ui_OverlayConfigure(OverlayFont(), OverlayInt("overlay-fontsize"), OverlayInt("overlay-timeout"), _GUI_Option("overlay-contrast"), OverlayInt("overlay-linespacing"))
 endfunc
@@ -277,6 +285,7 @@ func Ui_PushOptions()
 		Ui_AddOption(1, $g_avGUIOptionList[$i][0], $g_avGUIOptionList[$i][2], $g_avGUIOptionList[$i][3], Int($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][1]), String($g_avGUIOptionList[$i][5]))
 	next
 	Ui_SetOptionChoices("overlay-font", _ArrayToString(OverlayGetMonospaceFonts(), "|"))
+	Ui_SetOptionChoices("editor-font", _ArrayToString(OverlayGetMonospaceFonts(), "|"))
 endfunc
 
 func Ui_AssignHotkeys()
@@ -303,6 +312,8 @@ func Ui_HandleOptionEvent($sKey, $iInt, $sStr)
 	elseif ($sType == "str") then
 		_GUI_Option($sKey, $sStr)
 	endif
+	if ($sKey == "editor-fontsize") then Ui_SetEditorFontSize(Int($iInt))
+	if ($sKey == "editor-font") then Ui_SetEditorFont($sStr)
 	if (StringInStr($sKey, "overlay-") == 1) then
 		if ($sKey == "overlay-fontsize" or $sKey == "overlay-font" or $sKey == "overlay-linespacing") then $g_sOverlayMetricsKey = ""
 		Ui_ApplyOverlayConfig()

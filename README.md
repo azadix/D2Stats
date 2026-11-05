@@ -53,7 +53,7 @@ Rules are stored as `NotifierRules\*.rules` files and edited in the **Notifier**
 - Keywords, `"item name"` patterns, `{stat patterns}` and `# comments` are colorized on a near-black surface. Unknown keywords get a red dotted underline plus a tooltip with the closest matching flag.
 - Autocomplete pops up while typing or on `Ctrl+Space`. `Tab`/`Enter` inserts the highlighted entry, `Esc` closes the list, the mouse wheel walks a long list.
   - Keywords come from the flag table, item names from the in-game item cache **and** from the quoted patterns of every rule file, so unique/set names you already filter on are suggested before you are in a game.
-- The editor uses the notifier overlay font (Options → Overlay font) at 75% of its size.
+- The editor has its own font and size settings under Options → Notifier editor (they default to the overlay values but can differ).
 - `Ctrl+S` saves the file, `Ctrl+Z` / `Ctrl+Y` undo and redo, `Tab` indents the selected lines, `Shift+Tab` unindents. `Enter` inserts a plain newline, no automatic indentation.
 - Socket filters: `socketed0` … `socketed6` match an exact socket count, `socketed_any` matches any count (handy to override a socket filter inherited from a group).
 - Groups share one set of attributes between several rules. The header is a rule without a body — it may carry a name pattern, flags and `{stat}` patterns:

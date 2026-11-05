@@ -110,6 +110,8 @@ func DefineGlobals()
 		["overlay-linespacing", 2, "int", "Spacing between overlay lines (px)", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-contrast", 1, "cb", "Draw black background behind overlay text", "", "Overlay"], _
 		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule", "", "Notifier editor"], _
+		["editor-font", "Courier New", "str", "Notifier editor font", "", "Notifier editor"], _
+		["editor-fontsize", 12, "int", "Notifier editor font size", "", "Notifier editor"], _
 		["goblin-alert", 1, "cb", "Play sound (sound 6) when goblins are nearby.", "", "Sounds"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)", "", "Sounds"], _
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem", ""], _
@@ -594,6 +596,8 @@ func CreateGUI()
 	Ui_PushNotifierColors()
 	Ui_AssignHotkeys()
 	Ui_ApplyOverlayConfig()
+	Ui_SetEditorFontSize(Int(_GUI_Option("editor-fontsize")))
+	Ui_SetEditorFont(_GUI_Option("editor-font"))
 
 	Notifier_CreateTab()
 	SpeedCalc_CreateTab()
