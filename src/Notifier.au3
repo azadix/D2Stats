@@ -1,17 +1,20 @@
 #include-once
+#include <Array.au3>
 
 #Region Notifier globals
-global enum $eNotifyFlagsTier, $eNotifyFlagsQuality, $eNotifyFlagsMisc, $eNotifyFlagsNoMask, $eNotifyFlagsColour, $eNotifyFlagsSound, $eNotifyFlagsName, $eNotifyFlagsStat, $eNotifyFlagsMatchStats, $eNotifyFlagsMatch, $eNotifyFlagsLast
+global enum $eNotifyFlagsTier, $eNotifyFlagsQuality, $eNotifyFlagsMisc, $eNotifyFlagsSocket, $eNotifyFlagsNoMask, $eNotifyFlagsColour, $eNotifyFlagsSound, $eNotifyFlagsName, $eNotifyFlagsStat, $eNotifyFlagsMatchStats, $eNotifyFlagsMatch, $eNotifyFlagsLast
 global $g_asNotifyFlags[$eNotifyFlagsLast][32] = [ _
 	[ "0", "1", "2", "3", "4", "sacred", "angelic", "master" ], _
 	[ "low", "normal", "superior", "magic", "set", "rare", "unique", "craft", "honor" ], _
 	[ "eth" ], _
+	[ "socketed0", "socketed1", "socketed2", "socketed3", "socketed4", "socketed5", "socketed6", "socketed_any" ], _
 	[], _
 	[ "transparent", "white", "red", "lime", "blue", "gold", "grey", "black", "pink", "orange", "yellow", "green", "purple" ], _
 	[ "sound_none", "sound1", "sound2", "sound3", "sound4", "sound5", "sound6" ], _
 	[ "name" ], _
 	[ "stat" ] _
 ]
+global const $g_iSocketMaskAny = 0x7F ; bits 0..6 = socketed0 .. socketed6
 global $g_aiFlagsCountPerLine[0]
 
 global const $g_iNumSounds = 6 ; Max 31
@@ -24,6 +27,8 @@ global $g_avNotifyCompile[0][$eNotifyFlagsLast]	; Flags, Regex
 global $g_bNotifyCache = True
 global $g_bNotifyCompile = True
 global $g_bNotifierChanged = False
+global $g_asNotifierErrors[0]
+global $g_iNotifierErrorCount = 0
 
 global $g_goblinIds = [2774, 2775, 2776, 2777, 2779, 2780, 2781, 2782, 2783, 2784, 2785, 2786, 2787, 2788, 2789, 2790, 2791, 2792, 2793, 2794, 2795]
 global $g_goblinBuffer[] = []
@@ -98,6 +103,8 @@ func NotifierCache()
 		$g_avNotifyCache[$iClass][2] = StringRegExpReplace($sName, ".+\|", "")
 		$g_avNotifyCache[$iClass][3] = $bCanHaveSockets
 	next
+
+	NotifierPushItemNames()
 endfunc
 
 func NotifierFlagRef($sFlag, ByRef $iFlag, ByRef $iGroup)
@@ -124,14 +131,49 @@ func NotifierCompileFlag($sFlag, ByRef $avRet, $sLine)
 	
 	local $iFlag, $iGroup
 	if (not NotifierFlagRef($sFlag, $iFlag, $iGroup)) then
-		MsgBox($MB_ICONWARNING, "D2Stats", StringFormat("Unknown notifier flag '%s' in line:%s%s", $sFlag, @CRLF, $sLine))
+		; Reported through the notifier log instead of a modal message box: the
+		; rule editor highlights unknown keywords while typing.
+		NotifierLogError(StringFormat("Unknown flag '%s' in line: %s", $sFlag, $sLine))
 		return False
 	endif
 
-	if ($iGroup < $eNotifyFlagsNoMask) then $iFlag = BitOR(BitRotate(1, $iFlag, "D"), $avRet[$iGroup])
+	if ($iGroup < $eNotifyFlagsNoMask) then
+		if ($iGroup == $eNotifyFlagsSocket and StringLower($sFlag) == "socketed_any") then
+			; "socketed_any" matches every socket count.
+			$iFlag = $g_iSocketMaskAny
+		else
+			$iFlag = BitRotate(1, $iFlag, "D")
+		endif
+		$iFlag = BitOR($iFlag, $avRet[$iGroup])
+	endif
 	$avRet[$iGroup] = $iFlag
 
 	return $iGroup <> $eNotifyFlagsColour
+endfunc
+
+; Collects compile problems so they can be reported once, without blocking the
+; UI with a message box for every typo.
+func NotifierLogError($sMessage)
+	$g_iNotifierErrorCount += 1
+	if (UBound($g_asNotifierErrors) >= 20) then return
+	_ArrayAdd($g_asNotifierErrors, $sMessage)
+endfunc
+
+func NotifierFlushErrors()
+	if (UBound($g_asNotifierErrors) == 0) then return
+
+	local $sText = ""
+	for $i = 0 to UBound($g_asNotifierErrors) - 1
+		$sText &= @CRLF & "- " & $g_asNotifierErrors[$i]
+	next
+	if ($g_iNotifierErrorCount > UBound($g_asNotifierErrors)) then
+		$sText &= @CRLF & StringFormat("- ... and %d more", $g_iNotifierErrorCount - UBound($g_asNotifierErrors))
+	endif
+
+	_Debug("NotifierCompile", "Rule problems:" & $sText)
+
+	redim $g_asNotifierErrors[0]
+	$g_iNotifierErrorCount = 0
 endfunc
 
 func GetStatsGroups(byref $sLine, byref $avRet)
@@ -145,8 +187,17 @@ func GetStatsGroups(byref $sLine, byref $avRet)
 	endif
 endfunc
 
-func NotifierCompileLine($sLine, byref $avRet, $iCount)
-	$sLine = StringStripWS(StringRegExpReplace($sLine, "#.*", ""), BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING, $STR_STRIPSPACES))
+; Strips the comment and the surrounding whitespace from a rule line.
+func NotifierTrim($sLine)
+	return StringStripWS(StringRegExpReplace($sLine, "#.*", ""), BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING, $STR_STRIPSPACES))
+endfunc
+
+; Parses one rule line into $avRet.
+; $iFlagCount receives the number of flags written on the line itself.
+; Returns True when the line produces a rule.
+func NotifierParseLine($sLine, byref $avRet, byref $iFlagCount)
+	$iFlagCount = 0
+	$sLine = NotifierTrim($sLine)
 	local $iLineLength = StringLen($sLine)
 
 	local $sArg = "", $sChar
@@ -170,7 +221,7 @@ func NotifierCompileLine($sLine, byref $avRet, $iCount)
 		elseif ($sChar == " " and not $bItemPattern) then
 			if (NotifierCompileFlag($sArg, $avRet, $sLine)) then
 				$bHasFlags = True
-				$g_aiFlagsCountPerLine[$iCount] += 1
+				$iFlagCount += 1
 			endif
 
 			$sArg = ""
@@ -181,21 +232,101 @@ func NotifierCompileLine($sLine, byref $avRet, $iCount)
 
 	if (NotifierCompileFlag($sArg, $avRet, $sLine)) then
 		$bHasFlags = True
-		$g_aiFlagsCountPerLine[$iCount] += 1
+		$iFlagCount += 1
 	endif
 
 	if ($avRet[$eNotifyFlagsMatch] == "") then
-		if (not $bHasFlags) then return False
+		; A line that only carries stat patterns is still a valid rule body.
+		if (not $bHasFlags and not IsArray($avRet[$eNotifyFlagsMatchStats])) then return False
 		$avRet[$eNotifyFlagsMatch] = ".+"
 	endif
 
 	return True
 endfunc
 
+#Region Rule groups
+; A group shares one set of attributes between the rules inside it:
+;
+;	["Amulet|Ring$" rare sound2] {
+;	  {(2[5-9]|[3-9]\d) to all Attributes}
+;	  {[3-9] to All Skills}
+;	}
+;
+; The header is a normal rule without the body: it may carry a name pattern,
+; flags and stat patterns. Every line inside the braces becomes one rule that
+; inherits the header. A line may be just a stat pattern, just flags or just a
+; name - whatever it does not specify comes from the header. Values the rule
+; writes itself win over the header's value for the same flag group (tier,
+; quality, misc, color, sound, display) and for the name pattern. Stat patterns
+; are ANDed, so an item has to match the header patterns and the rule patterns.
+
+; Recognizes a group header line '[flags]' or '[flags] {'.
+; Returns 0 - not a header, 1 - header that opens the group, 2 - header that
+; expects the opening brace on a following line.
+func NotifierGroupHeader($sLine, byref $sHeader, byref $sRest)
+	$sHeader = ""
+	$sRest = ""
+
+	if (StringLeft($sLine, 1) <> "[") then return 0
+
+	local $iClose = StringInStr($sLine, "]", 1, -1)
+	if ($iClose < 2) then return 0
+
+	$sHeader = StringMid($sLine, 2, $iClose - 2)
+	$sRest = StringStripWS(StringMid($sLine, $iClose + 1), BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING))
+
+	return $sRest == "{" ? 1 : 2
+endfunc
+
+; True when the line closes a group. People write both "}" and "} ]" (closing the
+; header bracket again), so accept any mix of braces and brackets.
+func NotifierIsGroupClose($sLine)
+	$sLine = StringStripWS($sLine, BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING))
+	if ($sLine == "" or StringInStr($sLine, "}") == 0) then return False
+	return StringRegExp($sLine, "^[\s\}\]]+$") = 1
+endfunc
+
+; Applies the header attributes to a parsed rule line. Values the rule writes
+; itself win; everything else is inherited from the header.
+func NotifierGroupApply(byref $avLine, $avHeader)
+	local $i
+
+	for $i = 0 to $eNotifyFlagsMatchStats - 1
+		if (Int($avLine[$i]) == 0) then $avLine[$i] = $avHeader[$i]
+	next
+
+	; A line without its own name pattern uses the header's.
+	if ($avLine[$eNotifyFlagsMatch] == ".+" and $avHeader[$eNotifyFlagsMatch] <> "" And $avHeader[$eNotifyFlagsMatch] <> ".+") then
+		$avLine[$eNotifyFlagsMatch] = $avHeader[$eNotifyFlagsMatch]
+	endif
+
+	if (IsArray($avHeader[$eNotifyFlagsMatchStats])) then
+		if (IsArray($avLine[$eNotifyFlagsMatchStats])) then
+			_ArrayConcatenate($avLine[$eNotifyFlagsMatchStats], $avHeader[$eNotifyFlagsMatchStats])
+		else
+			$avLine[$eNotifyFlagsMatchStats] = $avHeader[$eNotifyFlagsMatchStats]
+		endif
+	endif
+endfunc
+
+; Parses the text between the brackets of a group header.
+func NotifierGroupParseHeader($sHeader, byref $avHeader, byref $iHeaderFlags)
+	redim $avHeader[0]
+	redim $avHeader[$eNotifyFlagsLast]
+
+	if (not NotifierParseLine($sHeader, $avHeader, $iHeaderFlags)) then
+		$iHeaderFlags = 0
+	endif
+endfunc
+#EndRegion
+
 func NotifierCompile()
 	if (not $g_bNotifyCompile) then return
 	$g_bNotifyCompile = False
 	$g_bNotifierChanged = True
+
+	redim $g_asNotifierErrors[0]
+	$g_iNotifierErrorCount = 0
 
 	local $asLines = StringSplit(_GUI_Option("notify-text"), @LF)
 	local $iLines = $asLines[0]
@@ -206,11 +337,73 @@ func NotifierCompile()
 	redim $g_aiFlagsCountPerLine[0]
 	redim $g_aiFlagsCountPerLine[$iLines]
 
-	local $avRet[0]
-	local $iCount = 0
+	local $avRet[0], $avHeader[0]
+	local $iCount = 0, $iFlagsCount = 0, $iHeaderFlags = 0
+	local $iGroupDepth = 0, $bPendingGroup = False
+	local $iHeaderKind = 0
+	local $sHeaderText = "", $sRest = "", $sLine
 
 	for $i = 1 to $iLines
-		if (NotifierCompileLine($asLines[$i], $avRet, $iCount)) then
+		$sLine = NotifierTrim($asLines[$i])
+		if ($sLine == "") then continueloop
+
+		if ($iGroupDepth > 0) then
+			if (NotifierIsGroupClose($sLine)) then
+				$iGroupDepth -= 1
+				if ($iGroupDepth == 0) then
+					redim $avHeader[$eNotifyFlagsLast]
+					$iHeaderFlags = 0
+				endif
+				continueloop
+			endif
+
+			; Nested groups are not supported: keep the brace bookkeeping so the
+			; outer group still closes on the right line, but drop the header.
+			$iHeaderKind = ($sLine == "{") ? 1 : NotifierGroupHeader($sLine, $sHeaderText, $sRest)
+			if ($iHeaderKind) then
+				NotifierLogError(StringFormat("Groups cannot be nested (line %d). The inner header is ignored.", $i))
+				if ($iHeaderKind == 1) then $iGroupDepth += 1
+				continueloop
+			endif
+
+			if (NotifierParseLine($sLine, $avRet, $iFlagsCount)) then
+				NotifierGroupApply($avRet, $avHeader)
+
+				$g_aiFlagsCountPerLine[$iCount] = $iFlagsCount + $iHeaderFlags
+				for $j = 0 to $eNotifyFlagsLast - 1
+					$g_avNotifyCompile[$iCount][$j] = $avRet[$j]
+				next
+				$iCount += 1
+			endif
+			continueloop
+		endif
+
+		if ($bPendingGroup) then
+			if ($sLine == "{") then
+				$bPendingGroup = False
+				$iGroupDepth = 1
+				continueloop
+			endif
+
+			NotifierLogError(StringFormat("Group header '[%s]' has no body (line %d).", $sHeaderText, $i))
+			$bPendingGroup = False
+		endif
+
+		$iHeaderKind = NotifierGroupHeader($sLine, $sHeaderText, $sRest)
+		if ($iHeaderKind) then
+			NotifierGroupParseHeader($sHeaderText, $avHeader, $iHeaderFlags)
+
+			if ($sRest <> "" and $sRest <> "{") then
+				NotifierLogError(StringFormat("Unexpected '%s' after the group header '[%s]'.", $sRest, $sHeaderText))
+			endif
+
+			$iGroupDepth = $iHeaderKind == 1 ? 1 : 0
+			$bPendingGroup = $iHeaderKind == 2
+			continueloop
+		endif
+
+		if (NotifierParseLine($sLine, $avRet, $iFlagsCount)) then
+			$g_aiFlagsCountPerLine[$iCount] = $iFlagsCount
 			for $j = 0 to $eNotifyFlagsLast - 1
 				$g_avNotifyCompile[$iCount][$j] = $avRet[$j]
 			next
@@ -218,8 +411,14 @@ func NotifierCompile()
 		endif
 	next
 
+	if ($iGroupDepth > 0 or $bPendingGroup) then
+		NotifierLogError("The notifier rules end inside a group. Add the closing '}'.")
+	endif
+
 	redim $g_aiFlagsCountPerLine[$iCount]
 	redim $g_avNotifyCompile[$iCount][$eNotifyFlagsLast]
+
+	NotifierFlushErrors()
 endfunc
 
 func NotifierHelp($sInput)
@@ -228,10 +427,14 @@ func NotifierHelp($sInput)
 	local $iItems = UBound($g_avNotifyCache)
 	local $asMatches[$iItems][2]
 	local $iCount = 0
+	local $iFlagsCount = 0
 
 	local $avRet[0]
 
-	if (NotifierCompileLine($sInput, $avRet, $iCount)) then
+	redim $g_asNotifierErrors[0]
+	$g_iNotifierErrorCount = 0
+
+	if (NotifierParseLine($sInput, $avRet, $iFlagsCount)) then
 		local $sMatch = $avRet[$eNotifyFlagsMatch]
 		local $iFlagsTier = $avRet[$eNotifyFlagsTier]
 
@@ -252,6 +455,7 @@ func NotifierHelp($sInput)
 	endif
 
 	redim $asMatches[$iCount][2]
+	NotifierFlushErrors()
 	_ArrayDisplay($asMatches, "Notifier Help", default, 32, @LF, "Item|Text")
 endfunc
 
@@ -270,7 +474,7 @@ func NotifierMain()
 	local $pPath, $pUnit, $pUnitData, $pCurrentUnit
 	local $iUnitType, $iClass, $iUnitId, $iQuality, $iFileIndex, $iEarLevel, $iFlags, $iTierFlag
 	local $bIsEthereal
-	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsColour, $iFlagsSound, $iFlagsDisplayName, $iFlagsDisplayStat
+	local $iFlagsTier, $iFlagsQuality, $iFlagsMisc, $iFlagsSocket, $iFlagsColour, $iFlagsSound, $iFlagsDisplayName, $iFlagsDisplayStat
 	local $sType
 
 	local $tUnitAny = DllStructCreate("dword iUnitType;dword iClass;dword pad1;dword dwUnitId;dword pad2;dword pUnitData;dword pad3[52];dword pUnit;")
@@ -333,6 +537,7 @@ func NotifierMain()
 						$iFlagsTier = $g_avNotifyCompile[$j][$eNotifyFlagsTier]
 						$iFlagsQuality = $g_avNotifyCompile[$j][$eNotifyFlagsQuality]
 						$iFlagsMisc = $g_avNotifyCompile[$j][$eNotifyFlagsMisc]
+						$iFlagsSocket = $g_avNotifyCompile[$j][$eNotifyFlagsSocket]
 						$iFlagsColour = $g_avNotifyCompile[$j][$eNotifyFlagsColour]
 						$iFlagsSound = $g_avNotifyCompile[$j][$eNotifyFlagsSound]
 						$iFlagsDisplayName = $g_avNotifyCompile[$j][$eNotifyFlagsName]
@@ -350,6 +555,11 @@ func NotifierMain()
 						if ($iFlagsTier and not BitAND($iFlagsTier, $iTierFlag)) then continueloop
 						if ($iFlagsQuality and not BitAND($iFlagsQuality, BitRotate(1, $iQuality - 1, "D"))) then continueloop
 						if (not $bIsEthereal and BitAND($iFlagsMisc, NotifierFlag("eth"))) then continueloop
+						if ($iFlagsSocket) then
+							local $iSocketCount = GetUnitStat($pCurrentUnit, 0xC2)
+							if ($iSocketCount < 0 or $iSocketCount > 6) then $iSocketCount = 0
+							if (not BitAND($iFlagsSocket, BitRotate(1, $iSocketCount, "D"))) then continueloop
+						endif
 
 						; Flags are added to the object because I don't know a more
                         ; convenient way to pass them to the function :)
@@ -730,6 +940,114 @@ endfunc
 #EndRegion
 
 #Region Notifier UI
+; Keyword metadata for the rule editor, as "category:keyword" entries joined with |.
+; The category tells the editor how to color the keyword and how to group the
+; completion popup.
+func NotifierKeywordList()
+	local $asCategory[$eNotifyFlagsLast]
+	$asCategory[$eNotifyFlagsTier] = "tier"
+	$asCategory[$eNotifyFlagsQuality] = "quality"
+	$asCategory[$eNotifyFlagsMisc] = "misc"
+	$asCategory[$eNotifyFlagsSocket] = "socket"
+	$asCategory[$eNotifyFlagsColour] = "color"
+	$asCategory[$eNotifyFlagsSound] = "sound"
+	$asCategory[$eNotifyFlagsName] = "display"
+	$asCategory[$eNotifyFlagsStat] = "display"
+
+	local $sList = "", $sWord
+	local $i, $j
+
+	for $i = 0 to $eNotifyFlagsLast - 1
+		if ($asCategory[$i] == "") then continueloop
+
+		for $j = 0 to UBound($g_asNotifyFlags, $UBOUND_COLUMNS) - 1
+			$sWord = $g_asNotifyFlags[$i][$j]
+			if ($sWord == "") then exitloop
+			$sList &= (StringLen($sList) ? "|" : "") & $asCategory[$i] & ":" & $sWord
+		next
+	next
+
+	return $sList
+endfunc
+
+func NotifierPushKeywords()
+	if ($g_hUiDll == -1) then return
+	Ui_SetNotifierKeywords(NotifierKeywordList())
+endfunc
+
+; Base type / unique name list used by the editor's quoted pattern completion.
+; Only available after the in-game item cache has been read.
+func NotifierPushItemNames()
+	if ($g_hUiDll == -1) then return
+	if (UBound($g_avNotifyCache) == 0) then return
+
+	local $oSeen = ObjCreate("Scripting.Dictionary")
+	local $sList = "", $sPart, $asParts
+	local $i, $j
+
+	for $i = 0 to UBound($g_avNotifyCache) - 1
+		$asParts = StringSplit($g_avNotifyCache[$i][0], "|")
+
+		for $j = 1 to $asParts[0]
+			$sPart = StringStripWS($asParts[$j], BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING))
+			if (StringLen($sPart) < 2) then continueloop
+			if ($oSeen.Exists(StringLower($sPart))) then continueloop
+
+			$oSeen.Add(StringLower($sPart), 1)
+			$sList &= (StringLen($sList) ? "|" : "") & $sPart
+		next
+	next
+
+	Ui_AddNotifierItemNames($sList)
+endfunc
+
+; Quoted item patterns harvested from every rule file. Names that already live in
+; the user's filters (unique names included) can be completed before the game
+; cache is built, and without typing the whole name again.
+func NotifierPushRuleNames()
+	if ($g_hUiDll == -1) then return
+
+	local $aFiles = _FileListToArray($g_sNotifierRulesDirectory, "*" & $g_sNotifierRulesExtension, $FLTA_FILES, True)
+	if (@error <> 0 or not IsArray($aFiles)) then return
+
+	local $oSeen = ObjCreate("Scripting.Dictionary")
+	local $sList = "", $sText, $sName, $sPart, $asMatches, $asParts
+	local $i, $j, $k
+
+	for $i = 1 to $aFiles[0]
+		$sText = FileRead($aFiles[$i])
+		if (@error) then continueloop
+
+		$asMatches = StringRegExp($sText, '"((?:\\.|[^"\\])*)"', $STR_REGEXPARRAYGLOBALMATCH)
+		if (@error) then continueloop
+
+		for $j = 0 to UBound($asMatches) - 1
+			; Names inside an alternation ("^(A|B|C)$") are separate suggestions.
+			$asParts = StringSplit($asMatches[$j], "|", 2)
+			if (@error) then
+				local $aSingle[1] = [$asMatches[$j]]
+				$asParts = $aSingle
+			endif
+
+			for $k = 0 to UBound($asParts) - 1
+				$sName = StringReplace($asParts[$k], '\"', '"')
+				$sName = StringRegExpReplace($sName, "^[\^\(]+|[\$\)]+$", "")
+				$sName = StringStripWS($sName, BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING))
+				if (StringLen($sName) < 2) then continueloop
+
+				; Only plain names make useful completions, regex fragments do not.
+				if (StringRegExp($sName, '[\\\[\]\(\)\|\^\$\*\+\?\{\}]')) then continueloop
+				if ($oSeen.Exists(StringLower($sName))) then continueloop
+
+				$oSeen.Add(StringLower($sName), 1)
+				$sList &= (StringLen($sList) ? "|" : "") & $sName
+			next
+		next
+	next
+
+	if ($sList <> "") then Ui_AddNotifierItemNames($sList)
+endfunc
+
 func OnChange_NotifyRulesCombo()
 	if (Ui_IsNotifierDirty()) then
 		local $iButton = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "D2Stats", "There are unsaved changes in the current notifier rules. Save?", 0, $g_hGUI)
@@ -840,6 +1158,8 @@ func OnClick_NotifyHelp()
 		'> name - To print type name and real name.', _
 		'> stat - To print type name and full stats. You can mix it with name flag', _
 		'> eth - Item must be ethereal.', _
+		'> socketed_any, socketed0 .. socketed6 - Socket count of the item.', _
+		'   socketed_any matches any count and overrides a socket filter from a group.', _
 		'> white red lime blue gold orange yellow green purple - Notification color.', _
 		StringFormat('> sound[1-%s] - Notification sound.', $g_iNumSounds), _
 		'', _
@@ -862,6 +1182,23 @@ func OnClick_NotifyHelp()
         '"Amulet$" {Fire Spell} {Maximum Mana}', _
         'This would match every amulet with "3-5 to all skills", "spell focus"', _
         'and "to spell damage" OR amulets with "fire spell damage" and "maximum mana"', _
+		'', _
+		'Groups:', _
+		'A group is a rule without a body. Everything between [ and ] is shared:', _
+		'  ["Amulet|Ring$" rare sound2] {', _
+		'    {(2[5-9]|[3-9]\d) to all Attributes}', _
+		'    {[3-9] to All Skills}', _
+		'  }', _
+		'Both lines become rare amulet/ring rules with sound 2. Each line inside', _
+		'the block inherits whatever it does not write itself (name, flags and stat', _
+		'patterns); stat patterns are added to the ones in the header.', _
+		'Flags written on the line win over the header, eg. "normal red" above.', _
+		'The block may be closed with "}" or with "} ]".', _
+		'', _
+		'Editor:', _
+		'Ctrl+Space opens the autocomplete list (Tab or Enter inserts, Esc closes).', _
+		'Hover an underlined word to see what is wrong with it.', _
+		'Ctrl+S saves, Ctrl+Z / Ctrl+Y undo and redo, Tab indents the selection.', _
 		'', _
 		'Write something in this box and click OK to see what matches!' _
 	]
@@ -902,6 +1239,7 @@ func SaveCurrentNotifierRulesToFile($sNotifierRulesName)
 	_GUI_Option("selectedNotifierRulesName", $sNotifierRulesName)
 	_GUI_Option("notify-text", $sNotifyEditContents)
 	Ui_SetNotifierText($sNotifyEditContents)
+	NotifierPushRuleNames()
 	$g_bNotifyCompile = True
 endfunc
 
@@ -1022,6 +1360,8 @@ Func CheckGoblinHaveSeenBefore($id)
 EndFunc
 
 func Notifier_CreateTab()
+	NotifierPushKeywords()
+	NotifierPushRuleNames()
 	RefreshNotifyRulesCombo(_GUI_Option("selectedNotifierRulesName"))
 endfunc
 

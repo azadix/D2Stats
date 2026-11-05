@@ -32,6 +32,28 @@ The font list comes from Windows/GDI, so Wine/Linux users only see fonts availab
 
 If you really want to change some properties that were not exposed on the application UI you'll have to edit the overlay/UI code (`native/d2stats_ui/` and `src/Overlay.au3`) and recompile it using provided script (`Compile.bat`)
 
+## Notifier rules
+Rules are stored as `NotifierRules\*.rules` files and edited in the **Notifier** tab. The editor is syntax aware:
+
+- Keywords, `"item name"` patterns, `{stat patterns}` and `# comments` are colorized on a near-black surface. Unknown keywords get a red dotted underline plus a tooltip with the closest matching flag.
+- Autocomplete pops up while typing or on `Ctrl+Space`. `Tab`/`Enter` inserts the highlighted entry, `Esc` closes the list, the mouse wheel walks a long list.
+  - Keywords come from the flag table, item names from the in-game item cache **and** from the quoted patterns of every rule file, so unique/set names you already filter on are suggested before you are in a game.
+- The editor uses the notifier overlay font (Options → Overlay font) at 75% of its size.
+- `Ctrl+S` saves the file, `Ctrl+Z` / `Ctrl+Y` undo and redo, `Tab` indents the selected lines, `Shift+Tab` unindents. `Enter` inserts a plain newline, no automatic indentation.
+- Socket filters: `socketed0` … `socketed6` match an exact socket count, `socketed_any` matches any count (handy to override a socket filter inherited from a group).
+- Groups share one set of attributes between several rules. The header is a rule without a body — it may carry a name pattern, flags and `{stat}` patterns:
+
+```
+["Amulet|Ring$" rare sound2] {
+  {(2[5-9]|[3-9]\d) to all Attributes}
+  {[3-9] to All Skills}
+}
+```
+
+Every line inside `[ ... ] { ... }` becomes one rule and inherits whatever it does not specify itself: a line may be only stat patterns, only flags or only a name. Header `{stat}` patterns have to match **in addition to** the line's own patterns, and a flag written on the line replaces the header's value for that flag group (tier, quality, eth, socket, color, sound). A group may be closed with `}` or `} ]`; groups cannot be nested.
+
+The rule editor — autocomplete, keyword highlighting and the grouping were heavily influenced by the notifier editor of [D2MXLUtils](https://github.com/synonymouse/D2MXLUtils).
+
 ## Layout
 - `D2Stats.au3` — application entry point (keep at repo root so runtime files stay beside the exe)
 - `src/` — feature modules (game memory, notifier, AutoIt bridge to ImGui)

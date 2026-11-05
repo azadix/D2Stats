@@ -166,6 +166,18 @@ func Ui_SetNotifierEdit($sText)
 	DllCall($g_hUiDll, "none", "D2Ui_SetNotifierEdit", "wstr", $sText)
 endfunc
 
+func Ui_SetNotifierKeywords($sPipe)
+	DllCall($g_hUiDll, "none", "D2Ui_SetNotifierKeywords", "wstr", $sPipe)
+endfunc
+
+func Ui_SetNotifierItemNames($sPipe)
+	DllCall($g_hUiDll, "none", "D2Ui_SetNotifierItemNames", "wstr", $sPipe)
+endfunc
+
+func Ui_AddNotifierItemNames($sPipe)
+	DllCall($g_hUiDll, "none", "D2Ui_AddNotifierItemNames", "wstr", $sPipe)
+endfunc
+
 func Ui_GetNotifierText()
 	local $aLen = DllCall($g_hUiDll, "int", "D2Ui_GetNotifierText", "ptr", 0, "int", 0)
 	local $iLen = (@error or $aLen[0] < 1) ? 1 : $aLen[0]

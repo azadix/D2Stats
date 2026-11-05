@@ -25,6 +25,7 @@ endif()
 
 add_library(d2stats_ui SHARED
 	src/d2stats_ui.cpp
+	src/rule_editor.cpp
 	d2stats_ui.def
 	${IMGUI_DIR}/imgui.cpp
 	${IMGUI_DIR}/imgui_draw.cpp

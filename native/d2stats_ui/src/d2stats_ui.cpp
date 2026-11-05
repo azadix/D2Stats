@@ -7,6 +7,10 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 
+#include "rule_editor.h"
+
+using d2ui::RuleEditor;
+
 #include <d3d11.h>
 #include <dxgi.h>
 #include <shellapi.h>
@@ -186,12 +190,14 @@ struct App {
 	ImGuiContext* overlayCtx = nullptr;
 	ImGuiContext* diffCtx = nullptr;
 	ImFont* overlayFont = nullptr;
+	ImFont* editorFont = nullptr;
 	std::string overlayFontName = "Courier New";
 	int overlayFontSize = 12;
 	int overlayTimeoutMs = 7500;
 	bool overlayContrast = true;
 	int overlayLineSpacing = 2;
 	int overlayAtlasVersion = 0;
+	bool wantMainFontRebuild = false;
 
 	int activeTab = 0;
 	bool mercenary = false;
@@ -204,7 +210,7 @@ struct App {
 	std::vector<std::string> notifyRules;
 	std::string notifySelected;
 	std::string notifySaved;
-	std::vector<char> notifyEdit;
+	RuleEditor notifyEditor;
 	int volumes[6] = {5, 5, 5, 5, 5, 5};
 	unsigned notifierColors[12] = {
 		0xFFFFFF, 0xFF0000, 0x15FF00, 0x7878F5, 0xF0CD8C, 0x9D9D9D,
@@ -930,6 +936,9 @@ ImFont* AddFaceFont(ImGuiIO& io, const std::string& face, float pixelSize) {
 	return io.Fonts->AddFontFromFileTTF(WideToUtf8(path.c_str()).c_str(), pixelSize, &cfg);
 }
 
+// The rule editor renders at 75% of the notifier overlay font size.
+constexpr float kEditorFontScale = 0.75f;
+
 void LoadUiFont(ImGuiContext* ctx) {
 	if (!ctx)
 		return;
@@ -943,9 +952,39 @@ void LoadUiFont(ImGuiContext* ctx) {
 		font = AddFaceFont(io, "Consolas", 16.0f);
 	if (!font)
 		io.Fonts->AddFontDefault();
+
+	if (ctx == g.mainCtx) {
+		// The rule editor uses the notifier overlay face at 75% of its size: the
+		// overlay is meant to be read from across the screen, the editor is not.
+		const float editorPixels = std::max(9.0f, OverlayFontPixels() * kEditorFontScale);
+		g.editorFont = AddFaceFont(io, g.overlayFontName, editorPixels);
+		if (!g.editorFont)
+			g.editorFont = AddFaceFont(io, "Courier New", editorPixels);
+		if (!g.editorFont)
+			g.editorFont = AddFaceFont(io, "Consolas", 13.0f);
+		if (!g.editorFont)
+			g.editorFont = AddFaceFont(io, "Cascadia Mono", 13.0f);
+		if (!g.editorFont)
+			g.editorFont = font;
+	}
+
 	unsigned char* pixels = nullptr;
 	int w = 0, h = 0;
 	io.Fonts->GetTexDataAsRGBA32(&pixels, &w, &h);
+}
+
+// Rebuilds the settings-window atlas after the overlay font changed. The editor
+// is the only widget that uses the second font, so the UI font is re-added too.
+void RebuildMainFonts() {
+	if (!g.mainCtx)
+		return;
+	ImGuiContext* prev = ImGui::GetCurrentContext();
+	ImGui::SetCurrentContext(g.mainCtx);
+	LoadUiFont(g.mainCtx);
+	ImGui_ImplDX11_InvalidateDeviceObjects();
+	ImGui_ImplDX11_CreateDeviceObjects();
+	if (prev)
+		ImGui::SetCurrentContext(prev);
 }
 
 void RebuildOverlayFont() {
@@ -1305,6 +1344,7 @@ void DrawOptions() {
 }
 
 void DrawNotifier() {
+	ImGui::SetNextItemWidth(180.0f);
 	if (ImGui::BeginCombo("##rules", g.notifySelected.c_str())) {
 		for (const auto& name : g.notifyRules) {
 			bool sel = name == g.notifySelected;
@@ -1325,13 +1365,10 @@ void DrawNotifier() {
 	if (ImGui::Button("Delete"))
 		g.PushEvent(D2UI_EVT_NOTIFY_DELETE);
 
-	if (g.notifyEdit.empty())
-		g.notifyEdit.assign(1, '\0');
+	bool save = false;
 	ImVec2 size = ImVec2(-1, -1);
-	ImGui::InputTextMultiline("##notify", g.notifyEdit.data(), g.notifyEdit.size(), size, ImGuiInputTextFlags_AllowTabInput);
-
-	ImGuiIO& io = ImGui::GetIO();
-	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false))
+	g.notifyEditor.Draw("##notify", g.editorFont, size, &save);
+	if (save)
 		g.PushEvent(D2UI_EVT_NOTIFY_SAVE);
 }
 
@@ -1873,7 +1910,6 @@ int D2UI_CALL D2Ui_Init(const wchar_t* title, int width, int height, const wchar
 	if (g.running)
 		return 1;
 	g.instance = GetModuleHandleW(nullptr);
-	g.notifyEdit.assign(1 << 20, '\0');
 	g.scStatus = "Empty fields use live item/skill stats. Auto follows class, morph, and weapon.";
 
 	g.mainWc = {};
@@ -2003,6 +2039,13 @@ int D2UI_CALL D2Ui_Tick() {
 
 	ExpireOverlay();
 
+	// Rebuilding the atlas invalidates the font texture, so it is done between
+	// frames instead of in the middle of drawing the options tab.
+	if (g.wantMainFontRebuild) {
+		g.wantMainFontRebuild = false;
+		RebuildMainFonts();
+	}
+
 	ImGui::SetCurrentContext(g.mainCtx);
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
@@ -2078,6 +2121,10 @@ void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int time
 	g.overlayLineSpacing = lineSpacing;
 	if (fontChanged && g.overlayCtx)
 		RebuildOverlayFont();
+	// The rule editor mirrors the overlay font so the notifier text looks the
+	// same where it is written and where it is shown.
+	if (fontChanged)
+		g.wantMainFontRebuild = true;
 }
 
 int D2UI_CALL D2Ui_OverlayIsVisible() {
@@ -2161,22 +2208,39 @@ void D2UI_CALL D2Ui_SetNotifyRules(const wchar_t* pipeList, const wchar_t* selec
 }
 
 void D2UI_CALL D2Ui_SetNotifierText(const wchar_t* text) {
-	std::string u = WideToUtf8(text);
-	g.notifySaved = u;
-	if (g.notifyEdit.size() < u.size() + 1)
-		g.notifyEdit.resize(u.size() + 65536, '\0');
-	memcpy(g.notifyEdit.data(), u.c_str(), u.size() + 1);
+	g.notifyEditor.SetText(WideToUtf8(text));
+	// Remember the normalized text so D2Ui_IsNotifierDirty() compares like with like.
+	g.notifySaved = g.notifyEditor.GetText();
 }
 
 void D2UI_CALL D2Ui_SetNotifierEdit(const wchar_t* text) {
-	std::string u = WideToUtf8(text);
-	if (g.notifyEdit.size() < u.size() + 1)
-		g.notifyEdit.resize(u.size() + 65536, '\0');
-	memcpy(g.notifyEdit.data(), u.c_str(), u.size() + 1);
+	g.notifyEditor.SetText(WideToUtf8(text));
+}
+
+void D2UI_CALL D2Ui_SetNotifierKeywords(const wchar_t* pipeList) {
+	g.notifyEditor.SetKeywords(WideToUtf8(pipeList));
+}
+
+void D2UI_CALL D2Ui_SetNotifierItemNames(const wchar_t* pipeList) {
+	g.notifyEditor.SetItemNames(WideToUtf8(pipeList));
+}
+
+void D2UI_CALL D2Ui_AddNotifierItemNames(const wchar_t* pipeList) {
+	g.notifyEditor.AppendItemNames(WideToUtf8(pipeList));
 }
 
 int D2UI_CALL D2Ui_GetNotifierText(wchar_t* buf, int cch) {
-	std::wstring w = Utf8ToWide(g.notifyEdit.data());
+	// Hand the text back with CRLF endings so rule files keep the format the rest
+	// of the AutoIt side expects.
+	const std::string& raw = g.notifyEditor.GetText();
+	std::string crlf;
+	crlf.reserve(raw.size() + 64);
+	for (char c : raw) {
+		if (c == '\n')
+			crlf.push_back('\r');
+		crlf.push_back(c);
+	}
+	std::wstring w = Utf8ToWide(crlf.c_str());
 	if (!buf || cch <= 0)
 		return static_cast<int>(w.size());
 	CopyWide(buf, cch, w.c_str());
@@ -2184,7 +2248,7 @@ int D2UI_CALL D2Ui_GetNotifierText(wchar_t* buf, int cch) {
 }
 
 int D2UI_CALL D2Ui_IsNotifierDirty() {
-	return std::string(g.notifyEdit.data()) != g.notifySaved ? 1 : 0;
+	return g.notifyEditor.GetText() != g.notifySaved ? 1 : 0;
 }
 
 int D2UI_CALL D2Ui_GetNotifyRulesSelected(wchar_t* buf, int cch) {

@@ -25,6 +25,9 @@ EXPORTS
 	D2Ui_SetNotifyRules
 	D2Ui_SetNotifierText
 	D2Ui_SetNotifierEdit
+	D2Ui_SetNotifierKeywords
+	D2Ui_SetNotifierItemNames
+	D2Ui_AddNotifierItemNames
 	D2Ui_GetNotifierText
 	D2Ui_IsNotifierDirty
 	D2Ui_GetNotifyRulesSelected

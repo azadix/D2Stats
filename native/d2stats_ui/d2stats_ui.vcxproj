@@ -72,6 +72,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\d2stats_ui.cpp" />
+    <ClCompile Include="src\rule_editor.cpp" />
     <ClCompile Include="third_party\imgui\imgui.cpp" />
     <ClCompile Include="third_party\imgui\imgui_draw.cpp" />
     <ClCompile Include="third_party\imgui\imgui_tables.cpp" />
@@ -81,6 +82,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\d2stats_ui.h" />
+    <ClInclude Include="src\rule_editor.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="d2stats_ui.def" />

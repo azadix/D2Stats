@@ -94,6 +94,9 @@ D2UI_API void D2UI_CALL D2Ui_SetOptionStr(const wchar_t* key, const wchar_t* val
 D2UI_API void D2UI_CALL D2Ui_SetNotifyRules(const wchar_t* pipeList, const wchar_t* selected);
 D2UI_API void D2UI_CALL D2Ui_SetNotifierText(const wchar_t* text);
 D2UI_API void D2UI_CALL D2Ui_SetNotifierEdit(const wchar_t* text);
+D2UI_API void D2UI_CALL D2Ui_SetNotifierKeywords(const wchar_t* pipeList);
+D2UI_API void D2UI_CALL D2Ui_SetNotifierItemNames(const wchar_t* pipeList);
+D2UI_API void D2UI_CALL D2Ui_AddNotifierItemNames(const wchar_t* pipeList);
 D2UI_API int D2UI_CALL D2Ui_GetNotifierText(wchar_t* buf, int cch);
 D2UI_API int D2UI_CALL D2Ui_IsNotifierDirty(void);
 D2UI_API int D2UI_CALL D2Ui_GetNotifyRulesSelected(wchar_t* buf, int cch);
