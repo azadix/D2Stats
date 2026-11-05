@@ -197,6 +197,7 @@ struct App {
 	int overlayFontSize = 12;
 	int editorFontSize = 12;
 	std::string editorFontName = "Courier New";
+	int statFontPercent = 100;
 	int overlayTimeoutMs = 7500;
 	bool overlayContrast = true;
 	int overlayLineSpacing = 2;
@@ -1406,7 +1407,17 @@ void DrawOptions() {
 		}
 		if (!open)
 			continue;
-
+		// The stat text size only matters while the notifier is on.
+		bool disabled = false;
+		if (o.key == "stat-font-percent") {
+			const OptionItem* notify = g.FindOption("notify-enabled");
+			disabled = !notify || notify->intValue == 0;
+		}
+		if (disabled)
+			ImGui::BeginDisabled();
+		DrawOptionRow(o, i);
+		if (disabled)
+			ImGui::EndDisabled();
 	}
 	FinishOptionsSection(current, open);
 
@@ -1909,6 +1920,10 @@ void DrawOverlayUi(int w, int h) {
 	if (g.overlayFont)
 		ImGui::PushFont(g.overlayFont);
 	for (const auto& line : g.overlayLines) {
+		// Stat lines ("stat" flag) draw smaller than the item name line.
+		const bool statSmall = line.stat && g.overlayFont && g.statFontPercent < 100;
+		if (statSmall)
+			ImGui::PushFont(g.overlayFont, OverlayFontPixels() * static_cast<float>(g.statFontPercent) / 100.0f);
 		ImVec2 p = ImGui::GetCursorScreenPos();
 		ImVec2 sz = ImGui::CalcTextSize(line.text.c_str());
 		if (g.overlayContrast) {
@@ -1917,6 +1932,8 @@ void DrawOverlayUi(int w, int h) {
 		ImGui::TextColored(RgbToVec(static_cast<int>(line.color)), "%s", line.text.c_str());
 		if (line.gapAfter)
 			ImGui::Dummy(ImVec2(0, 2));
+		if (statSmall)
+			ImGui::PopFont();
 	}
 	if (g.overlayFont)
 		ImGui::PopFont();
@@ -2209,6 +2226,18 @@ void D2UI_CALL D2Ui_Print(const wchar_t* text, unsigned int colorRgb, int timeou
 	g.overlayLines.push_back(std::move(line));
 }
 
+void D2UI_CALL D2Ui_PrintStat(const wchar_t* text, unsigned int colorRgb, int timeoutMs) {
+	OverlayLine line;
+	line.text = WideToUtf8(text);
+	line.color = colorRgb ? colorRgb : 0xFFFFFF;
+	line.expireAt = timeoutMs <= 0 ? 0 : GetTickCount64() + static_cast<ULONGLONG>(timeoutMs);
+	line.stat = true;
+	g.overlayLines.push_back(std::move(line));
+}
+
+void D2UI_CALL D2Ui_SetStatFontPercent(int percent) {
+	g.statFontPercent = percent < 30 ? 30 : (percent > 100 ? 100 : percent);
+}
 void D2UI_CALL D2Ui_OverlayAddGap() {
 	if (!g.overlayLines.empty())
 		g.overlayLines.back().gapAfter = true;

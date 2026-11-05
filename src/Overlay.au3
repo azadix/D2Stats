@@ -217,7 +217,7 @@ Func RecoverOverlay()
 	UpdateOverlayPosition()
 EndFunc
 
-Func PrintString($sText, $iColor = $ePrintWhite)
+Func PrintString($sText, $iColor = $ePrintWhite, $bStatText = False)
 	If Not IsGameWindowPresent() Then Return
 	UpdateOverlayPosition()
 
@@ -274,7 +274,11 @@ Func PrintString($sText, $iColor = $ePrintWhite)
 	For $i = 0 To UBound($aSplitText) - 1
 		Local $sLine = $aSplitText[$i]
 		If $sLine = "" Then ContinueLoop
-		Ui_Print($sLine, $iTextColor, $iTimeout)
+		If $bStatText Then
+			Ui_PrintStat($sLine, $iTextColor, $iTimeout)
+		Else
+			Ui_Print($sLine, $iTextColor, $iTimeout)
+		EndIf
 		$iPrinted += 1
 	Next
 

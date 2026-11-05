@@ -86,6 +86,9 @@ func Ui_GetActiveTab()
 	return $aRet[0]
 endfunc
 
+func Ui_PrintStat($sText, $iColor, $iTimeout)
+	DllCall($g_hUiDll, "none", "D2Ui_PrintStat", "wstr", $sText, "uint", $iColor, "int", $iTimeout)
+endfunc
 func Ui_Print($sText, $iColorRgb, $iTimeoutMs)
 	DllCall($g_hUiDll, "none", "D2Ui_Print", "wstr", $sText, "dword", $iColorRgb, "int", $iTimeoutMs)
 endfunc
@@ -266,6 +269,10 @@ func Ui_SetEditorFontSize($iSize)
 	DllCall($g_hUiDll, "none", "D2Ui_SetEditorFontSize", "int", $iSize)
 endfunc
 
+func Ui_SetStatFontPercent($iPercent)
+	DllCall($g_hUiDll, "none", "D2Ui_SetStatFontPercent", "int", $iPercent)
+endfunc
+
 func Ui_SetEditorFont($sFont)
 	DllCall($g_hUiDll, "none", "D2Ui_SetEditorFont", "wstr", $sFont)
 endfunc
@@ -313,6 +320,7 @@ func Ui_HandleOptionEvent($sKey, $iInt, $sStr)
 		_GUI_Option($sKey, $sStr)
 	endif
 	if ($sKey == "editor-fontsize") then Ui_SetEditorFontSize(Int($iInt))
+	if ($sKey == "stat-font-percent") then Ui_SetStatFontPercent(Int($iInt))
 	if ($sKey == "editor-font") then Ui_SetEditorFont($sStr)
 	if (StringInStr($sKey, "overlay-") == 1) then
 		if ($sKey == "overlay-fontsize" or $sKey == "overlay-font" or $sKey == "overlay-linespacing") then $g_sOverlayMetricsKey = ""

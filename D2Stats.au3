@@ -102,6 +102,7 @@ func DefineGlobals()
 		["notify-only-filtered", 0, "cb", "Only show filtered stats", "", "Overlay"], _
 		["oneline-name", 0, "cb", "One line item name and base type notification style", "", "Overlay"], _
 		["oneline-stats", 0, "cb", "One line item stats notification style", "", "Overlay"], _
+		["stat-font-percent", 100, "int", "Stat text size (% of overlay font)", "", "Overlay"], _
 		["overlay-x", 10, "int", "Overlay X offset", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings", "Overlay"], _
@@ -598,6 +599,7 @@ func CreateGUI()
 	Ui_ApplyOverlayConfig()
 	Ui_SetEditorFontSize(Int(_GUI_Option("editor-fontsize")))
 	Ui_SetEditorFont(_GUI_Option("editor-font"))
+	Ui_SetStatFontPercent(Int(_GUI_Option("stat-font-percent")))
 
 	Notifier_CreateTab()
 	SpeedCalc_CreateTab()

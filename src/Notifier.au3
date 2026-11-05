@@ -814,7 +814,7 @@ func DisplayStats($asStats)
 			endif
         else
             if (ShouldPrintStat($statColor, $bKeywordMatched)) then
-                PrintString("  " & $statText, $statColor)
+                PrintString("  " & $statText, $statColor, True)
             endif
         endif
     next
@@ -824,7 +824,7 @@ func DisplayStats($asStats)
 		;Modify print color based on notify filtered stats checkbox state
 		if (_GUI_Option("notify-only-filtered")) then $ePrintColor = $ePrintRed
 
-		PrintString(StringTrimRight($asCombinedStats, 2), $ePrintColor)
+		PrintString(StringTrimRight($asCombinedStats, 2), $ePrintColor, True)
 	endif
 endfunc
 

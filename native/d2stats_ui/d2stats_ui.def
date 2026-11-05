@@ -13,6 +13,8 @@ EXPORTS
 	D2Ui_OverlayConfigure
 	D2Ui_SetEditorFontSize
 	D2Ui_SetEditorFont
+	D2Ui_SetStatFontPercent
+	D2Ui_PrintStat
 	D2Ui_OverlayIsVisible
 	D2Ui_ClearStats
 	D2Ui_AddStat

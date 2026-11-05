@@ -79,6 +79,8 @@ D2UI_API void D2UI_CALL D2Ui_OverlayClear(void);
 D2UI_API void D2UI_CALL D2Ui_OverlayConfigure(const wchar_t* font, int fontSize, int timeoutMs, int contrast, int lineSpacing);
 D2UI_API void D2UI_CALL D2Ui_SetEditorFontSize(int size);
 D2UI_API void D2UI_CALL D2Ui_SetEditorFont(const wchar_t* font);
+D2UI_API void D2UI_CALL D2Ui_SetStatFontPercent(int percent);
+D2UI_API void D2UI_CALL D2Ui_PrintStat(const wchar_t* text, unsigned int colorRgb, int timeoutMs);
 D2UI_API int D2UI_CALL D2Ui_OverlayIsVisible(void);
 
 D2UI_API void D2UI_CALL D2Ui_ClearStats(void);
