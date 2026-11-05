@@ -8,10 +8,25 @@
 
 [Forum post](https://forum.median-xl.com/viewtopic.php?f=4&t=85654)
 
-![D2Stats window screenshot](Assets/screenshot2.png "D2Stats window screenshot")
-![D2Stats window screenshot](Assets/screenshot3.png "D2Stats window screenshot")
-![D2Stats window screenshot](Assets/screenshot4.png "D2Stats window screenshot")
-![D2Stats window screenshot](Assets/screenshot5.png "D2Stats notifier example")
+## Screenshots
+
+**Character and item stats**
+
+![Basic tab](Assets/screenshot1.png "Basic tab")
+![Page 1](Assets/screenshot2.png "Page 1: base and bonus stats, resistances")
+![Page 2](Assets/screenshot3.png "Page 2: damage, leech, misc")
+
+**Options**
+
+![Options](Assets/screenshot4.png "Options: grouped settings and the theme switcher")
+![Notification colors](Assets/screenshot5.png "Options: notification colours with a live preview")
+
+**Tools**
+
+![Speedcalc](Assets/screenshot6.png "Speedcalc: breakpoints for the selected weapon")
+![Notifier](Assets/screenshot7.png "Notifier: rule editor with highlighted keywords and groups")
+![Compare](Assets/screenshot8.png "Compare: pick the stats to compare")
+![Compare result](Assets/screenshot9.png "Compare: old, new and the difference")
 
 ## FAQ
 ### "Windows defender/Antivirus removes/quarantines the exe file. Is it a virus?"
