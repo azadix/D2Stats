@@ -96,13 +96,12 @@ func DefineGlobals()
 	global $g_avGUIOptionList[][6] = [ _
 		["nopickup", 0, "cb", "Automatically enable /nopickup", "", "General"], _
 		["copy-name", 0, "cb", "Only copy item name", "", "General"], _
-		["notify-enabled", 1, "cb", "Enable notifier", "", "Notifier"], _
-		["unique-tier", 1, "cb", "Show sacred tier of unique (SU/SSU/SSSU)", "", "Notifier"], _
-		["notify-superior", 0, "cb", "Notifier prefixes superior items with 'Superior'", "", "Notifier"], _
-		["notify-only-filtered", 0, "cb", "Only show filtered stats", "", "Notifier"], _
-		["oneline-name", 0, "cb", "One line item name and base type notification style", "", "Notifier"], _
-		["oneline-stats", 0, "cb", "One line item stats notification style", "", "Notifier"], _
-		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule", "", "Notifier"], _
+		["notify-enabled", 1, "cb", "Enable notifier", "", "Overlay"], _
+		["unique-tier", 1, "cb", "Show sacred tier of unique (SU/SSU/SSSU)", "", "Overlay"], _
+		["notify-superior", 0, "cb", "Notifier prefixes superior items with 'Superior'", "", "Overlay"], _
+		["notify-only-filtered", 0, "cb", "Only show filtered stats", "", "Overlay"], _
+		["oneline-name", 0, "cb", "One line item name and base type notification style", "", "Overlay"], _
+		["oneline-stats", 0, "cb", "One line item stats notification style", "", "Overlay"], _
 		["overlay-x", 10, "int", "Overlay X offset", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-y", 30, "int", "Overlay Y offset", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-fontsize", 12, "int", "Overlay font size", "OnChange_OverlaySettings", "Overlay"], _
@@ -110,6 +109,7 @@ func DefineGlobals()
 		["overlay-timeout", 7500, "int", "Notification timeout (ms)", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-linespacing", 2, "int", "Spacing between overlay lines (px)", "OnChange_OverlaySettings", "Overlay"], _
 		["overlay-contrast", 1, "cb", "Draw black background behind overlay text", "", "Overlay"], _
+		["debug-notifier", 0, "cb", "Debug item notifications with match criteria and matching rule", "", "Notifier editor"], _
 		["goblin-alert", 1, "cb", "Play sound (sound 6) when goblins are nearby.", "", "Sounds"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)", "", "Sounds"], _
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem", ""], _

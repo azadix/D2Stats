@@ -635,18 +635,23 @@ void SaveTheme() {
 }
 
 const char* kOptionsSectionNames[] = {
-	"General", "Notifier", "Notification colors", "Overlay", "Sounds", "Hotkeys"
+	"General", "Overlay", "Notification colors", "Notifier editor", "Sounds", "Hotkeys"
 };
 
 std::wstring SectionIniKey(const char* name) {
 	return std::wstring(L"Section.") + Utf8ToWide(name);
 }
 
+// Only General starts expanded; everything else starts collapsed.
+bool SectionDefaultOpen(const char* name) {
+	return strcmp(name, "General") == 0;
+}
+
 bool GetSectionOpen(const char* name) {
 	auto it = g.sectionOpen.find(name);
 	if (it != g.sectionOpen.end())
 		return it->second;
-	return true;
+	return SectionDefaultOpen(name);
 }
 
 void SaveSectionOpen(const char* name, bool open) {
@@ -656,11 +661,22 @@ void SaveSectionOpen(const char* name, bool open) {
 
 void LoadSectionOpen() {
 	std::wstring ini = UiIniPath();
+	// The groups were reorganised (Notifier split into Overlay and Notifier editor),
+	// so states saved by an older build are dropped once.
+	wchar_t version[8]{};
+	GetPrivateProfileStringW(L"UI", L"OptionsSectionsVersion", L"0", version, 8, ini.c_str());
+	const bool reset = _wtoi(version) < 2;
 	for (const char* name : kOptionsSectionNames) {
+		const bool defaultOpen = SectionDefaultOpen(name);
 		wchar_t buf[8]{};
-		GetPrivateProfileStringW(L"UI", SectionIniKey(name).c_str(), L"1", buf, 8, ini.c_str());
-		g.sectionOpen[name] = (buf[0] != L'0');
+		GetPrivateProfileStringW(L"UI", SectionIniKey(name).c_str(), defaultOpen ? L"1" : L"0", buf, 8, ini.c_str());
+		const bool open = reset ? defaultOpen : (buf[0] != L'0');
+		g.sectionOpen[name] = open;
+		if (reset)
+			WritePrivateProfileStringW(L"UI", SectionIniKey(name).c_str(), open ? L"1" : L"0", ini.c_str());
 	}
+	if (reset)
+		WritePrivateProfileStringW(L"UI", L"OptionsSectionsVersion", L"2", ini.c_str());
 }
 
 bool OptionsSectionHeader(const char* name) {
@@ -1350,14 +1366,17 @@ void DrawNotifierColors() {
 void DrawSounds();
 
 void FinishOptionsSection(const std::string& section, bool open) {
-	if (section == "Notifier") {
-		if (OptionsSectionHeader("Notification colors"))
-			DrawNotifierColors();
-	}
 	if (!open || section.empty())
 		return;
-	if (section == "Sounds")
+	if (section == "Overlay") {
+		// Sub-group of Overlay: hidden while the Overlay section is collapsed.
+		ImGui::Indent(14.0f);
+		if (OptionsSectionHeader("Notification colors"))
+			DrawNotifierColors();
+		ImGui::Unindent(14.0f);
+	} else if (section == "Sounds") {
 		DrawSounds();
+	}
 }
 
 void DrawOptions() {
@@ -1483,6 +1502,8 @@ void DrawDiffWindow() {
 	ImGui::SetNextWindowSize(vp->WorkSize);
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
 							 ImGuiWindowFlags_NoBringToFrontOnFocus;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 	ImGui::Begin("##statdiff", nullptr, flags);
 	ImGui::BeginChild("diff_scroll", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4), ImGuiChildFlags_None,
 		ImGuiWindowFlags_AlwaysVerticalScrollbar);
@@ -1512,6 +1533,7 @@ void DrawDiffWindow() {
 	if (ImGui::Button("Close", ImVec2(100, 0)))
 		g.showDiff = false;
 	ImGui::End();
+	ImGui::PopStyleVar(2);
 }
 
 bool EnsureDiffWindow(bool focus) {
@@ -1808,7 +1830,8 @@ void DrawTabStrip() {
 			ImU32 bg = ImGui::GetColorU32(selected ? ImGuiCol_TabSelected : hovered ? ImGuiCol_TabHovered : ImGuiCol_Tab);
 			dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + height), bg, rounding, ImDrawFlags_RoundCornersTop);
 			if (selected)
-				dl->AddRectFilled(ImVec2(x0, rowPos.y), ImVec2(x1, rowPos.y + overline), ImGui::GetColorU32(ImGuiCol_TabSelectedOverline), rounding, ImDrawFlags_RoundCornersTop);
+				// Highlight bar along the bottom edge of the selected tab.
+				dl->AddRectFilled(ImVec2(x0, rowPos.y + height - overline), ImVec2(x1, rowPos.y + height), ImGui::GetColorU32(ImGuiCol_TabSelectedOverline));
 			const ImVec2 textSz = ImGui::CalcTextSize(names[t]);
 			dl->AddText(ImVec2(x0 + (x1 - x0 - textSz.x) * 0.5f, rowPos.y + (height - textSz.y) * 0.5f),
 				ImGui::GetColorU32(ImGuiCol_Text), names[t]);
@@ -1828,6 +1851,10 @@ void DrawMainUi() {
 	ImGui::SetNextWindowPos(vp->WorkPos);
 	ImGui::SetNextWindowSize(vp->WorkSize);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+	// The native frame already draws the window border, so the ImGui one would show
+	// up as a second, inset border.
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
 							 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 	ImGui::Begin("D2Stats", nullptr, flags);
@@ -1848,7 +1875,7 @@ void DrawMainUi() {
 	if (showBottom)
 		DrawBottomBar();
 	ImGui::End();
-	ImGui::PopStyleVar();
+	ImGui::PopStyleVar(3);
 
 	if (g.capturingHotkey >= 0) {
 		int code = CaptureHotkey();
