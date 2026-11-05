@@ -60,6 +60,7 @@ target_link_libraries(d2stats_ui PRIVATE
 	gdi32
 	user32
 	shell32
+	dwmapi
 	ole32
 )
 

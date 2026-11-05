@@ -2,6 +2,7 @@
 #include "d2stats_ui.h"
 
 #include <windows.h>
+#include <dwmapi.h>
 
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -546,8 +547,46 @@ void ApplyThemeToCurrentContext() {
 	ApplyIniThemeStyle(g_iniThemes[static_cast<size_t>(g.theme)]);
 }
 
-void ApplyThemeAllContexts() {
+// ---------------------------------------------------------------------------
+// Window frame
+// ---------------------------------------------------------------------------
+
+// The title bar and the outer border are drawn by DWM, not by ImGui, so they can
+// only follow the theme through DwmSetWindowAttribute. Numbers instead of the
+// DWMWA_* names keep this compiling on SDKs that predate Windows 11.
+void ApplyWindowFrameColors(HWND hwnd) {
+	if (!hwnd || !g.mainCtx)
+		return;
+
 	ImGuiContext* prev = ImGui::GetCurrentContext();
+	ImGui::SetCurrentContext(g.mainCtx);
+	const ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+	const ImVec4 border = ImGui::GetStyleColorVec4(ImGuiCol_Border);
+	const ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+	if (prev)
+		ImGui::SetCurrentContext(prev);
+
+	auto colorRef = [](const ImVec4& c) {
+		auto channel = [](float v) {
+			const float clamped = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+			return static_cast<DWORD>(clamped * 255.0f + 0.5f);
+		};
+		return RGB(channel(c.x), channel(c.y), channel(c.z));
+	};
+
+	const BOOL dark = (text.x + text.y + text.z) > 1.5f ? TRUE : FALSE;
+	const COLORREF caption = colorRef(bg);
+	const COLORREF frame = colorRef(border);
+	const COLORREF titleText = colorRef(text);
+
+	DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+	DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+	DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &frame, sizeof(frame));
+	DwmSetWindowAttribute(hwnd, 36 /* DWMWA_TEXT_COLOR */, &titleText, sizeof(titleText));
+
+}
+
+void ApplyThemeAllContexts() {	ImGuiContext* prev = ImGui::GetCurrentContext();
 	if (g.mainCtx) {
 		ImGui::SetCurrentContext(g.mainCtx);
 		ApplyThemeToCurrentContext();
@@ -562,6 +601,9 @@ void ApplyThemeAllContexts() {
 	}
 	if (prev)
 		ImGui::SetCurrentContext(prev);
+
+	ApplyWindowFrameColors(g.mainHwnd);
+	ApplyWindowFrameColors(g.diffHwnd);
 }
 
 int FindThemeIndexByName(const char* name) {
@@ -1076,6 +1118,12 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 			return true;
 	}
 	switch (msg) {
+	case WM_ACTIVATE:
+		// DWM only applies the caption/border colours once the window is activated,
+		// so refresh them whenever it gains focus.
+		if (LOWORD(wParam) != WA_INACTIVE)
+			ApplyWindowFrameColors(hWnd);
+		return 0;
 	case WM_SIZE:
 		if (g.device && wParam != SIZE_MINIMIZED && g.swapChain) {
 			CleanupMainRenderTarget();
@@ -1500,6 +1548,7 @@ bool EnsureDiffWindow(bool focus) {
 			rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, g.instance, nullptr);
 		if (!g.diffHwnd)
 			return false;
+		ApplyWindowFrameColors(g.diffHwnd);
 	}
 	if (!g.diffSwap && !CreateDiffSwapChain())
 		return false;
@@ -1507,6 +1556,7 @@ bool EnsureDiffWindow(bool focus) {
 		g.diffCtx = ImGui::CreateContext();
 		ImGui::SetCurrentContext(g.diffCtx);
 		ApplyThemeToCurrentContext();
+		ApplyWindowFrameColors(g.diffHwnd);
 		ImGuiIO& io = ImGui::GetIO();
 		io.IniFilename = nullptr;
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -1518,6 +1568,7 @@ bool EnsureDiffWindow(bool focus) {
 	}
 	if (!IsWindowVisible(g.diffHwnd))
 		ShowWindow(g.diffHwnd, SW_SHOW);
+		ApplyWindowFrameColors(g.diffHwnd);
 	if (focus && !wasVisible)
 		SetForegroundWindow(g.diffHwnd);
 	return true;
@@ -1974,6 +2025,7 @@ int D2UI_CALL D2Ui_Init(const wchar_t* title, int width, int height, const wchar
 
 	ImGui::SetCurrentContext(g.mainCtx);
 	ShowWindow(g.mainHwnd, SW_SHOW);
+	ApplyWindowFrameColors(g.mainHwnd);
 	UpdateWindow(g.mainHwnd);
 	g.running = true;
 	g.wantClose = false;
@@ -2017,6 +2069,29 @@ void D2UI_CALL D2Ui_Shutdown() {
 int D2UI_CALL D2Ui_Tick() {
 	if (!g.running)
 		return 0;
+
+	// DWM ignores the caption/border colours unless they are set while the window
+	// is the foreground one, and it drops them when they are set in the same moment
+	// the window becomes active - so apply them shortly after each activation, and
+	// again when the theme changed.
+	{
+		static int appliedTheme = -1;
+		static ULONGLONG focusedSince = 0;
+		static ULONGLONG appliedAt = 0;
+		const ULONGLONG now = GetTickCount64();
+		if (g.mainHwnd && GetForegroundWindow() == g.mainHwnd) {
+			if (!focusedSince)
+				focusedSince = now;
+			const bool themeChanged = appliedTheme != g.theme;
+			if (now - focusedSince >= 500 && (themeChanged || appliedAt < focusedSince)) {
+				ApplyWindowFrameColors(g.mainHwnd);
+				appliedTheme = g.theme;
+				appliedAt = now;
+			}
+		} else {
+			focusedSince = 0;
+		}
+	}
 	MSG msg;
 	while (PeekMessageW(&msg, g.mainHwnd, 0, 0, PM_REMOVE)) {
 		TranslateMessage(&msg);
