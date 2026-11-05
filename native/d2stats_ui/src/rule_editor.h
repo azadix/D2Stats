@@ -83,7 +83,6 @@ private:
 	// Text / line index -------------------------------------------------------
 	void RebuildIndex();
 	void RebuildStructure();
-	void UpdateDocumentItems();
 	int LineCount() const { return static_cast<int>(lineOffsets_.size()); }
 	int LineFromPos(int pos) const;
 	int LineStart(int line) const;
@@ -95,6 +94,9 @@ private:
 	bool IsGroupCloseLine(int line) const;
 	bool HasFoldMarker(int line) const;
 	int VisualIndexOf(int line) const;
+	// True when pos sits in a quoted name that has no closing quote yet, so an
+	// accepted completion has to add one instead of leaving the line broken.
+	bool InsideUnterminatedString(int pos) const;
 
 	// Editing -----------------------------------------------------------------
 	void BeginEdit(bool typing);
@@ -164,8 +166,6 @@ private:
 	std::vector<RuleCompletion> keywords_;
 	std::unordered_map<std::string, Token> keywordTokens_;
 	std::vector<RuleCompletion> items_;
-	std::vector<RuleCompletion> documentItems_;
-	bool documentItemsDirty_ = true;
 
 	bool completionOpen_ = false;
 	bool completionShowAll_ = false;

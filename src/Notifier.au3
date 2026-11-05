@@ -655,7 +655,7 @@ func FormatNotifications(byref $asPreNotificationsPool)
 		if ($iQuality >= 0 and $iQuality < UBound($g_iQualityColor)) then
 			$iQualityColor = $g_iQualityColor[$iQuality]
 		endif
-		; No notifier color: use the in-game ÿc code (name, then type). Consumables
+		; No notifier color: use the in-game Ăżc code (name, then type). Consumables
 		; and runes are both "not equipment" but white vs orange in game.
 		local $iItemColor = GetD2TextPrintColor($asItemName, GetD2TextPrintColor($asItemType, $iQualityColor))
         local $sPreName = ""
@@ -1001,53 +1001,6 @@ func NotifierPushItemNames()
 	Ui_AddNotifierItemNames($sList)
 endfunc
 
-; Quoted item patterns harvested from every rule file. Names that already live in
-; the user's filters (unique names included) can be completed before the game
-; cache is built, and without typing the whole name again.
-func NotifierPushRuleNames()
-	if ($g_hUiDll == -1) then return
-
-	local $aFiles = _FileListToArray($g_sNotifierRulesDirectory, "*" & $g_sNotifierRulesExtension, $FLTA_FILES, True)
-	if (@error <> 0 or not IsArray($aFiles)) then return
-
-	local $oSeen = ObjCreate("Scripting.Dictionary")
-	local $sList = "", $sText, $sName, $sPart, $asMatches, $asParts
-	local $i, $j, $k
-
-	for $i = 1 to $aFiles[0]
-		$sText = FileRead($aFiles[$i])
-		if (@error) then continueloop
-
-		$asMatches = StringRegExp($sText, '"((?:\\.|[^"\\])*)"', $STR_REGEXPARRAYGLOBALMATCH)
-		if (@error) then continueloop
-
-		for $j = 0 to UBound($asMatches) - 1
-			; Names inside an alternation ("^(A|B|C)$") are separate suggestions.
-			$asParts = StringSplit($asMatches[$j], "|", 2)
-			if (@error) then
-				local $aSingle[1] = [$asMatches[$j]]
-				$asParts = $aSingle
-			endif
-
-			for $k = 0 to UBound($asParts) - 1
-				$sName = StringReplace($asParts[$k], '\"', '"')
-				$sName = StringRegExpReplace($sName, "^[\^\(]+|[\$\)]+$", "")
-				$sName = StringStripWS($sName, BitOR($STR_STRIPLEADING, $STR_STRIPTRAILING))
-				if (StringLen($sName) < 2) then continueloop
-
-				; Only plain names make useful completions, regex fragments do not.
-				if (StringRegExp($sName, '[\\\[\]\(\)\|\^\$\*\+\?\{\}]')) then continueloop
-				if ($oSeen.Exists(StringLower($sName))) then continueloop
-
-				$oSeen.Add(StringLower($sName), 1)
-				$sList &= (StringLen($sList) ? "|" : "") & $sName
-			next
-		next
-	next
-
-	if ($sList <> "") then Ui_AddNotifierItemNames($sList)
-endfunc
-
 func OnChange_NotifyRulesCombo()
 	if (Ui_IsNotifierDirty()) then
 		local $iButton = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "D2Stats", "There are unsaved changes in the current notifier rules. Save?", 0, $g_hGUI)
@@ -1239,7 +1192,6 @@ func SaveCurrentNotifierRulesToFile($sNotifierRulesName)
 	_GUI_Option("selectedNotifierRulesName", $sNotifierRulesName)
 	_GUI_Option("notify-text", $sNotifyEditContents)
 	Ui_SetNotifierText($sNotifyEditContents)
-	NotifierPushRuleNames()
 	$g_bNotifyCompile = True
 endfunc
 
@@ -1361,7 +1313,6 @@ EndFunc
 
 func Notifier_CreateTab()
 	NotifierPushKeywords()
-	NotifierPushRuleNames()
 	RefreshNotifyRulesCombo(_GUI_Option("selectedNotifierRulesName"))
 endfunc
 

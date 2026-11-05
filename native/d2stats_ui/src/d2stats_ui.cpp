@@ -927,7 +927,10 @@ float OverlayFontPixels() {
 
 ImFont* AddFaceFont(ImGuiIO& io, const std::string& face, float pixelSize) {
 	std::wstring path = ResolveFaceFile(face);
-	if (path.empty())
+	// The registry (and the known file names) can name a font that is not actually
+	// installed - a bare Wine prefix has almost nothing. Dear ImGui asserts when
+	// AddFontFromFileTTF cannot read the file, so check it first.
+	if (path.empty() || GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
 		return nullptr;
 	ImFontConfig cfg;
 	cfg.OversampleH = 2;

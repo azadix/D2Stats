@@ -254,7 +254,6 @@ void RuleEditor::RebuildIndex() {
 		if (text_[i] == '\n')
 			lineOffsets_.push_back(static_cast<unsigned>(i + 1));
 	}
-	documentItemsDirty_ = true;
 	folded_.resize(lineOffsets_.size(), 0);
 	cursor_ = ClampPos(cursor_);
 	if (anchor_ >= 0)
@@ -345,6 +344,30 @@ int RuleEditor::ClampPos(int pos) const {
 	return std::max(0, std::min(pos, static_cast<int>(text_.size())));
 }
 
+bool RuleEditor::InsideUnterminatedString(int pos) const {
+	const int line = LineFromPos(pos);
+	const int lineStart = LineStart(line);
+	const std::string_view text = LineView(line);
+	const int index = pos - lineStart;
+	if (index <= 0 || index > static_cast<int>(text.size()))
+		return false;
+
+	bool inside = false;
+	for (int i = 0; i < index; ++i) {
+		if (text[static_cast<size_t>(i)] == '"')
+			inside = !inside;
+	}
+	if (!inside)
+		return false;
+
+	// A string that already has its closing quote keeps it; only an unterminated
+	// one ("Stone of J|) needs the completion to add the quote.
+	for (int i = index; i < static_cast<int>(text.size()); ++i) {
+		if (text[static_cast<size_t>(i)] == '"')
+			return false;
+	}
+	return true;
+}
 bool RuleEditor::IsGroupOpenLine(int line) const {
 	// Comments are stripped the same way the AutoIt rule compiler strips them,
 	// so a trailing "# note" does not hide the opening brace.
@@ -387,75 +410,6 @@ bool RuleEditor::HasFoldMarker(int line) const {
 	if (line + 1 >= LineCount())
 		return false;
 	return lineDepth_[static_cast<size_t>(line + 1)] > lineDepth_[static_cast<size_t>(line)];
-}
-
-void RuleEditor::UpdateDocumentItems() {
-	documentItemsDirty_ = false;
-	documentItems_.clear();
-
-	std::unordered_map<std::string, bool> seen;
-	for (int line = 0; line < LineCount(); ++line) {
-		const std::string_view text = LineView(line);
-		for (size_t i = 0; i < text.size(); ++i) {
-			if (text[i] != '"')
-				continue;
-
-			size_t j = i + 1;
-			bool escaped = false;
-			std::string content;
-			while (j < text.size()) {
-				const char c = text[j];
-				if (escaped) {
-					escaped = false;
-				} else if (c == '\\') {
-					escaped = true;
-				} else if (c == '"') {
-					break;
-				}
-				content.push_back(c);
-				++j;
-			}
-			i = j;
-
-			// Split alternations and drop anchors so "^(A|B)$" suggests A and B.
-			size_t partStart = 0;
-			while (partStart <= content.size()) {
-				size_t partEnd = content.find('|', partStart);
-				if (partEnd == std::string::npos)
-					partEnd = content.size();
-				std::string part = content.substr(partStart, partEnd - partStart);
-				partStart = partEnd + 1;
-
-				size_t begin = 0;
-				size_t end = part.size();
-				while (begin < end && (part[begin] == '^' || part[begin] == '('))
-					++begin;
-				while (end > begin && (part[end - 1] == '$' || part[end - 1] == ')'))
-					--end;
-				while (begin < end && IsSpaceChar(part[begin]))
-					++begin;
-				while (end > begin && IsSpaceChar(part[end - 1]))
-					--end;
-				part = part.substr(begin, end - begin);
-
-				if (part.size() < 2 || part.size() > 48)
-					continue;
-				// Only remember plain names; the popup inserts labels verbatim and
-				// a regex would be useless as a suggestion.
-				if (part.find_first_of("\\[]()|^$.*+?{}") != std::string::npos)
-					continue;
-				const std::string key = Lower(part);
-				if (seen.count(key))
-					continue;
-				seen[key] = true;
-
-				RuleCompletion completion;
-				completion.category = "text";
-				completion.label = part;
-				documentItems_.push_back(std::move(completion));
-			}
-		}
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -1083,8 +1037,6 @@ void RuleEditor::FilterCompletion() {
 	if (context.kind == LineContext::String) {
 		for (const auto& item : items_)
 			push(item);
-		for (const auto& item : documentItems_)
-			push(item);
 	} else {
 		for (const auto& keyword : keywords_)
 			push(keyword);
@@ -1114,8 +1066,14 @@ void RuleEditor::AcceptCompletion() {
 
 	std::string insert = completion.label;
 	const bool isName = completion.category == "item" || completion.category == "text";
-	if (!isName)
+	if (isName) {
+		// A name lives in quotes; when the closing quote is not typed yet, the
+		// completion adds it so `"Stone of J` becomes `"Stone of Jades"`.
+		if (InsideUnterminatedString(completionStart_))
+			insert.push_back('"');
+	} else {
 		insert.push_back(' ');
+	}
 
 	ReplaceRange(completionStart_, cursor_, insert);
 	CloseCompletion();
@@ -1464,9 +1422,6 @@ bool RuleEditor::Draw(const char* id, ImFont* font, const ImVec2& size, bool* sa
 		RebuildIndex();
 	if (static_cast<int>(lineDepth_.size()) != LineCount())
 		RebuildStructure();
-	if (documentItemsDirty_)
-		UpdateDocumentItems();
-
 	drawFont_ = font;
 	drawFontSize_ = font ? font->FontSize : ImGui::GetFontSize();
 
