@@ -90,11 +90,12 @@ func DefineGlobals()
 	global const $g_iD2InjectStringBytes = 0x8000
 	global const $g_iD2InjectStringWChars = $g_iD2InjectStringBytes / 2
 
-	global const $g_iGUIOptionsGeneral = 16
-	global const $g_iGUIOptionsHotkey = 4
+	global $g_iGUIOptionsGeneral = 0
+	global $g_iGUIOptionsHotkey = 0
 
 	global $g_avGUIOptionList[][6] = [ _
 		["nopickup", 0, "cb", "Automatically enable /nopickup", "", "General"], _
+		["copy-name", 0, "cb", "Only copy item name", "", "General"], _
 		["notify-enabled", 1, "cb", "Enable notifier", "", "Notifier"], _
 		["unique-tier", 1, "cb", "Show sacred tier of unique (SU/SSU/SSSU)", "", "Notifier"], _
 		["notify-superior", 0, "cb", "Notifier prefixes superior items with 'Superior'", "", "Notifier"], _
@@ -112,12 +113,26 @@ func DefineGlobals()
 		["goblin-alert", 1, "cb", "Play sound (sound 6) when goblins are nearby.", "", "Sounds"], _
 		["use-wav", 0, "cb", "Use .wav instead of .mp3 for sounds (For Linux Compatibility)", "", "Sounds"], _
 		["copy", 0x002D, "hk", "Copy item text", "HotKey_CopyItem", ""], _
-		["copy-name", 0, "cb", "Only copy item name", "", ""], _
 		["readstats", 0x0000, "hk", "Read stats without tabbing out of the game", "HotKey_ReadStats", ""], _
 		["show-notifier-log", 0x00DC, "hk", "Show notifier log", "HotKey_ShowNotifierLog", ""], _
 		["notify-text", $g_sNotifyTextDefault, "tx", "", "", ""], _
 		["selectedNotifierRulesName", "Default", "tx", "", "", ""] _
 	]
+
+	; The UI gets the general options first and the hotkeys after them, so the split
+	; is derived from the table instead of a hardcoded count.
+	local $iGeneralCount = 0, $iHotkeyCount = 0
+	local $iGeneralIndex
+	for $iGeneralIndex = 0 to UBound($g_avGUIOptionList) - 1
+		local $sType = $g_avGUIOptionList[$iGeneralIndex][2]
+		if ($sType == "hk") then
+			$iHotkeyCount += 1
+		elseif ($sType <> "tx") then
+			$iGeneralCount += 1
+		endif
+	next
+	$g_iGUIOptionsGeneral = $iGeneralCount
+	$g_iGUIOptionsHotkey = $iHotkeyCount
 endfunc
 #EndRegion
 
