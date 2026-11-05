@@ -267,6 +267,7 @@ App g;
 struct IniTheme {
 	std::string name;
 	std::string base = "StyleColorsLight";
+	bool hasBase = false;
 	bool hasColor[ImGuiCol_COUNT]{};
 	ImVec4 colors[ImGuiCol_COUNT]{};
 	bool hasRounding = false;
@@ -481,6 +482,7 @@ void LoadThemesFromIni() {
 			cur->popupBorderSize = strtof(val.c_str(), nullptr);
 		} else if (key == "Base") {
 			cur->base = val;
+			cur->hasBase = true;
 		} else {
 			int col = FindImGuiColByName(key);
 			if (col >= 0) {
@@ -521,7 +523,14 @@ void ApplyFallbackLightThemeStyle() {
 }
 
 void ApplyIniThemeStyle(const IniTheme& theme) {
-	if (theme.base == "StyleColorsLight")
+	// Most themes do not name a base style; pick it from their own background so the
+	// colours they do not set are not taken from the wrong (light) defaults.
+	bool light = theme.base == "StyleColorsLight";
+	if (!theme.hasBase && theme.hasColor[ImGuiCol_WindowBg]) {
+		const ImVec4& bg = theme.colors[ImGuiCol_WindowBg];
+		light = (0.2126f * bg.x + 0.7152f * bg.y + 0.0722f * bg.z) > 0.5f;
+	}
+	if (light)
 		ImGui::StyleColorsLight();
 	else
 		ImGui::StyleColorsDark();
@@ -541,6 +550,21 @@ void ApplyIniThemeStyle(const IniTheme& theme) {
 		dim.w *= 0.80f;
 		style.Colors[ImGuiCol_TabDimmedSelectedOverline] = dim;
 	}
+
+	// Colours added by newer ImGui versions (1.92/1.93) have no theme entries, so
+	// derive them from the palette instead of keeping the base style's value.
+	if (!theme.hasColor[ImGuiCol_CheckboxSelectedBg])
+		style.Colors[ImGuiCol_CheckboxSelectedBg] = style.Colors[ImGuiCol_FrameBgActive];
+	if (!theme.hasColor[ImGuiCol_InputTextCursor])
+		style.Colors[ImGuiCol_InputTextCursor] = style.Colors[ImGuiCol_Text];
+	if (!theme.hasColor[ImGuiCol_TreeLines])
+		style.Colors[ImGuiCol_TreeLines] = style.Colors[ImGuiCol_Border];
+	if (!theme.hasColor[ImGuiCol_UnsavedMarker])
+		style.Colors[ImGuiCol_UnsavedMarker] = style.Colors[ImGuiCol_CheckMark];
+	if (!theme.hasColor[ImGuiCol_NavCursor])
+		style.Colors[ImGuiCol_NavCursor] = style.Colors[ImGuiCol_CheckMark];
+	if (!theme.hasColor[ImGuiCol_DragDropTargetBg])
+		style.Colors[ImGuiCol_DragDropTargetBg] = style.Colors[ImGuiCol_FrameBgActive];
 }
 
 void ApplyThemeToCurrentContext() {
