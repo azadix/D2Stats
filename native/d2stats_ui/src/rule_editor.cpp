@@ -29,6 +29,14 @@ bool IsNameChar(char c) {
 	return IsWordChar(c) || c == ' ' || c == '\'' || c == '-';
 }
 
+// 1.92 moved glyph metrics to ImFontBaked: ask for the baked font of the size the
+// editor draws at instead of the old ImFont::GetCharAdvance.
+float CharAdvanceOf(ImFont* font, float size, ImWchar c) {
+	if (!font)
+		return 0.0f;
+	ImFontBaked* baked = font->GetFontBaked(size);
+	return baked ? baked->GetCharAdvance(c) : 0.0f;
+}
 bool IsCompletionTrigger(char c) {
 	return IsWordChar(c) || c == '-';
 }
@@ -674,7 +682,7 @@ int RuleEditor::VisualIndexOf(int line) const {
 
 float RuleEditor::LineHeight() const {
 	ImFont* font = drawFont_ ? drawFont_ : ImGui::GetFont();
-	return std::floor((font ? font->FontSize : 13.0f) + 4.0f);
+	return std::floor((font ? font->LegacySize : 13.0f) + 4.0f);
 }
 
 float RuleEditor::MeasureX(int line, int pos) const {
@@ -1153,7 +1161,7 @@ void RuleEditor::ComputeCompletionRect(float textX, float firstLineY, float line
 
 	// Nudge the list to the right so it does not sit on top of the caret / the
 	// word being typed.
-	const float charWidth = std::max(1.0f, drawFont_->GetCharAdvance('0'));
+	const float charWidth = std::max(1.0f, CharAdvanceOf(drawFont_, drawFontSize_, '0'));
 	const float xOffset = std::max(10.0f, charWidth);
 
 	ImVec2 pos(caretX + xOffset, caretY + lineHeight);
@@ -1423,11 +1431,11 @@ bool RuleEditor::Draw(const char* id, ImFont* font, const ImVec2& size, bool* sa
 	if (static_cast<int>(lineDepth_.size()) != LineCount())
 		RebuildStructure();
 	drawFont_ = font;
-	drawFontSize_ = font ? font->FontSize : ImGui::GetFontSize();
+	drawFontSize_ = font ? font->LegacySize : ImGui::GetFontSize();
 
 	const Palette palette = BuildPalette();
 	const float lineHeight = LineHeight();
-	const float charWidth = std::max(1.0f, drawFont_->GetCharAdvance('0'));
+	const float charWidth = std::max(1.0f, CharAdvanceOf(drawFont_, drawFontSize_, '0'));
 
 	int digits = 2;
 	for (int value = LineCount(); value >= 10; value /= 10)

@@ -17,3 +17,13 @@ fi
 cp D2Stats.exe dest
 cp d2stats_ui.dll dest
 cp -R Sounds dest
+
+# The theme switcher reads themes.ini from beside the exe; without it the list is
+# empty and only the built-in light style is available.
+if [ -f themes.ini ]; then
+	cp themes.ini dest
+else
+	echo "themes.ini is missing; the shipped build would have no themes." >&2
+	exit 1
+fi
+

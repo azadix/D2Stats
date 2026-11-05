@@ -7,12 +7,43 @@ This project includes third-party software. License notices and texts are collec
 - **Use:** settings window and overlay (`native/d2stats_ui/`, compiled into `d2stats_ui.dll`)
 - **Source:** https://github.com/ocornut/imgui
 - **License file:** https://github.com/ocornut/imgui/blob/master/LICENSE.txt
-- **Version fetched by CMake:** v1.91.9b
+- **Version fetched by CMake:** v1.93.0
 
 ```
 The MIT License (MIT)
 
 Copyright (c) 2014-2026 Omar Cornut
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Fluxion (ImGui themes)
+
+- **Use:** colour palettes of the ImGui themes shipped in `themes.ini`: `Dark`, `ForestGreen`, `Amethyst`, `Sapphire`, `Amber` (upstream `AmberYellow`), `Mint` (upstream `Dracula`), `CatppuccinMocha`, `GruvboxHard`, `CrimsonVesuvius`, `RoseQuartz`
+- **Source:** https://github.com/TheAncientOwl/fluxion — `src/Fluxion/Views/Settings/Modules/Theme.cpp`
+- **Changes:** the palettes were converted to the `themes.ini` format and slightly altered (accent colours, borders, and a few style metrics were adjusted; `Amber` and `Mint` are renamed versions of `AmberYellow` and `Dracula`)
+- **License:** MIT
+
+```
+MIT License
+
+Copyright (c) 2026 Alexandru Delegeanu
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

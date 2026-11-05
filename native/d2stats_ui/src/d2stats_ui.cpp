@@ -971,9 +971,7 @@ void LoadUiFont(ImGuiContext* ctx) {
 			g.editorFont = font;
 	}
 
-	unsigned char* pixels = nullptr;
-	int w = 0, h = 0;
-	io.Fonts->GetTexDataAsRGBA32(&pixels, &w, &h);
+	// 1.92+ builds and uploads the atlas in the backend (RendererHasTextures).
 }
 
 // Rebuilds the settings-window atlas after the overlay font changed. The editor
@@ -1002,9 +1000,7 @@ void RebuildOverlayFont() {
 		g.overlayFont = AddFaceFont(io, "Courier New", OverlayFontPixels());
 	if (!g.overlayFont)
 		g.overlayFont = io.Fonts->AddFontDefault();
-	unsigned char* pixels = nullptr;
-	int w = 0, h = 0;
-	io.Fonts->GetTexDataAsRGBA32(&pixels, &w, &h);
+	// 1.92+ builds and uploads the atlas in the backend (RendererHasTextures).
 	ImGui_ImplDX11_InvalidateDeviceObjects();
 	ImGui_ImplDX11_CreateDeviceObjects();
 	g.overlayAtlasVersion++;

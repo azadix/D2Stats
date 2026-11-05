@@ -13,7 +13,7 @@ if(NOT EXISTS "${IMGUI_DIR}/imgui.cpp")
 	include(FetchContent)
 	FetchContent_Declare(
 		imgui
-		URL https://github.com/ocornut/imgui/archive/refs/tags/v1.91.9b.zip
+		URL https://github.com/ocornut/imgui/archive/refs/tags/v1.93.0.zip
 		DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 	)
 	FetchContent_GetProperties(imgui)

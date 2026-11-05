@@ -159,7 +159,7 @@ func NotifierLogError($sMessage)
 	_ArrayAdd($g_asNotifierErrors, $sMessage)
 endfunc
 
-func NotifierFlushErrors()
+func NotifierFlushErrors($bShow = False)
 	if (UBound($g_asNotifierErrors) == 0) then return
 
 	local $sText = ""
@@ -171,6 +171,13 @@ func NotifierFlushErrors()
 	endif
 
 	_Debug("NotifierCompile", "Rule problems:" & $sText)
+
+	; On save the editor's red underline is easy to miss, so the problems are
+	; shown in a dialog as well; in game the overlay line is enough.
+	if ($bShow) then
+		MsgBox($MB_ICONWARNING, "D2Stats", "The notifier rules were saved, but these parts could not be understood:" & _
+			$sText & @CRLF & @CRLF & "Check the underlined keywords in the editor.", 0, $g_hGUI)
+	endif
 
 	redim $g_asNotifierErrors[0]
 	$g_iNotifierErrorCount = 0
@@ -320,7 +327,7 @@ func NotifierGroupParseHeader($sHeader, byref $avHeader, byref $iHeaderFlags)
 endfunc
 #EndRegion
 
-func NotifierCompile()
+func NotifierCompile($bShowErrors = False)
 	if (not $g_bNotifyCompile) then return
 	$g_bNotifyCompile = False
 	$g_bNotifierChanged = True
@@ -418,7 +425,7 @@ func NotifierCompile()
 	redim $g_aiFlagsCountPerLine[$iCount]
 	redim $g_avNotifyCompile[$iCount][$eNotifyFlagsLast]
 
-	NotifierFlushErrors()
+	NotifierFlushErrors($bShowErrors)
 endfunc
 
 func NotifierHelp($sInput)
@@ -1193,6 +1200,9 @@ func SaveCurrentNotifierRulesToFile($sNotifierRulesName)
 	_GUI_Option("notify-text", $sNotifyEditContents)
 	Ui_SetNotifierText($sNotifyEditContents)
 	$g_bNotifyCompile = True
+	; Compile now so rule problems are reported while saving, not only once a game
+	; is running (the in-game loop would surface them much later).
+	NotifierCompile(True)
 endfunc
 
 func CreateNotifierRulesFile($sNotifierRulesFilePath, $sNotifierRules = "")
